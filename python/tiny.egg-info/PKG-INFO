@@ -1,0 +1,5 @@
+Metadata-Version: 2.4
+Name: tiny
+Version: 0.1.0
+Summary: Python DSL for MLIR Tutorial dialects
+Requires-Python: >=3.10
