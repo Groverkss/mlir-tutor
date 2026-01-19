@@ -1,3 +1,10 @@
+#===----------------------------------------------------------------------===#
+# Tutorial MLIR Tool
+#===----------------------------------------------------------------------===#
+
+# Add chapter subdirectories.
+add_subdirectory(ch1-cpu-vector-dsl)
+
 set(LLVM_LINK_COMPONENTS
   Support
 )
@@ -23,4 +30,12 @@ target_link_libraries(tutorial-opt
   MLIRRegisterAllDialects
   MLIRRegisterAllPasses
   MLIRRegisterAllExtensions
+  # Tutorial chapter libraries
+  TinyDialect
+)
+
+# Include tutorial headers.
+target_include_directories(tutorial-opt PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}
+  ${CMAKE_CURRENT_BINARY_DIR}
 )
