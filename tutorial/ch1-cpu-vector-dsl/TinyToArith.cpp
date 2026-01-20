@@ -12,7 +12,7 @@
 #include "mlir/Dialect/Vector/IR/VectorOps.h"
 #include "mlir/IR/PatternMatch.h"
 #include "mlir/Pass/Pass.h"
-#include "mlir/Transforms/DialectConversion.h"
+#include "mlir/Transforms/GreedyPatternRewriteDriver.h"
 
 namespace mlir::tiny {
 
@@ -154,28 +154,14 @@ struct SumOpLowering : public OpRewritePattern<SumOp> {
 class TinyToArithPass : public impl::TinyToArithBase<TinyToArithPass> {
 public:
   void runOnOperation() override {
-    // Set up the conversion target.
-    ConversionTarget target(getContext());
-
-    // Mark arithmetic Tiny operations as illegal.
-    target.addIllegalOp<ConstantOp, AddFOp, SubFOp, MulFOp, DivFOp, AddIOp,
-                        SubIOp, MulIOp, DivIOp, SumOp>();
-
-    // Mark arith and vector dialects as legal.
-    target.addLegalDialect<arith::ArithDialect, vector::VectorDialect>();
-
-    // Keep memory operations legal (they will be lowered by TinyToLLVM).
-    target.addLegalOp<LoadOp, StoreOp>();
-
     // Set up rewrite patterns.
     RewritePatternSet patterns(&getContext());
     patterns.add<ConstantOpLowering, AddFOpLowering, SubFOpLowering,
                  MulFOpLowering, DivFOpLowering, AddIOpLowering, SubIOpLowering,
                  MulIOpLowering, DivIOpLowering, SumOpLowering>(&getContext());
 
-    // Apply the conversion.
-    if (failed(applyPartialConversion(getOperation(), target,
-                                      std::move(patterns))))
+    // Apply patterns greedily to lower all matching operations.
+    if (failed(applyPatternsGreedily(getOperation(), std::move(patterns))))
       signalPassFailure();
   }
 };

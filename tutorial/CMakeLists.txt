@@ -4,6 +4,7 @@
 
 # Add chapter subdirectories.
 add_subdirectory(ch1-cpu-vector-dsl)
+add_subdirectory(ch2-cpu-vector-dsl-loops)
 
 set(LLVM_LINK_COMPONENTS
   Support
@@ -32,6 +33,7 @@ target_link_libraries(tutorial-opt
   MLIRRegisterAllExtensions
   # Tutorial chapter libraries
   TinyDialect
+  TinyLoopDialect
 )
 
 # Include tutorial headers.
