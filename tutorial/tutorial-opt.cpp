@@ -18,6 +18,10 @@
 #include "ch2-cpu-vector-dsl-loops/TinyLoopDialect.h"
 #include "ch2-cpu-vector-dsl-loops/TinyLoopPasses.h"
 
+// Chapter 3: TinyTile dialect
+#include "ch3-gpu-tile-dsl/TinyTileDialect.h"
+#include "ch3-gpu-tile-dsl/TinyTilePasses.h"
+
 int main(int argc, char **argv) {
   mlir::DialectRegistry registry;
 
@@ -33,10 +37,12 @@ int main(int argc, char **argv) {
   // Register tutorial dialects.
   registry.insert<mlir::tiny::TinyDialect>();
   registry.insert<mlir::tiny_loop::TinyLoopDialect>();
+  registry.insert<mlir::tiny_tile::TinyTileDialect>();
 
   // Register tutorial passes.
   mlir::tiny::registerPasses();
   mlir::tiny_loop::registerPasses();
+  mlir::tiny_tile::registerPasses();
 
   return mlir::asMainReturnCode(
       mlir::MlirOptMain(argc, argv, "Tutorial optimizer driver\n", registry));
