@@ -22,7 +22,7 @@ python3 -m mlir_wheel --root-dir
 4. Configure CMake:
 
 ```bash
-mlir build
+mkdir build
 cd build
 cmake ../ -DCMAKE_PREFIX_PATH=$(python -m mlir_wheel --root-dir)
 ```
