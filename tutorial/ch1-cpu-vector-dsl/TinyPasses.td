@@ -1,6 +1,8 @@
 //===- TinyPasses.td - Tiny dialect passes -----------------*- tablegen -*-===//
 //
 // Defines passes for the Tiny dialect.
+// 
+// Reference: https://mlir.llvm.org/docs/PassManagement/#tablegen-specification
 //
 //===----------------------------------------------------------------------===//
 

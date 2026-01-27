@@ -1,8 +1,13 @@
 //===- TinyDialect.td - Tiny dialect definition ------------*- tablegen -*-===//
 //
 // Defines the Tiny dialect for the MLIR tutorial.
+// 
 // This dialect provides simple vector operations on f16 vectors and index 
 // computations.
+// 
+// References:
+// - https://mlir.llvm.org/docs/DefiningDialects/#defining-a-dialect
+// -
 //
 //===----------------------------------------------------------------------===//
 
@@ -19,6 +24,8 @@ include "mlir/Interfaces/SideEffectInterfaces.td"
 // Tiny dialect definition
 //===----------------------------------------------------------------------===//
 
+// This is the dialect definition for the Tiny dialect.
+// Reference: https://mlir.llvm.org/docs/DefiningDialects/#defining-a-dialect
 def Tiny_Dialect : Dialect {
   let name = "tiny";
   let summary = "A simple vector DSL dialect for the MLIR tutorial.";
@@ -35,6 +42,10 @@ def Tiny_Dialect : Dialect {
 //===----------------------------------------------------------------------===//
 // Type definitions
 //===----------------------------------------------------------------------===//
+
+// We define a custom !tiny.ptr type for this chapter. You don't need to worry
+// about it right now, as we provide it for you. We will learn about custom
+// types and attributes in later chapters.
 
 // Base class for Tiny dialect types.
 class Tiny_Type<string name, string typeMnemonic, list<Trait> traits = []>
@@ -60,6 +71,9 @@ def Tiny_PtrType : Tiny_Type<"Ptr", "ptr"> {
 //===----------------------------------------------------------------------===//
 // Base operation definition
 //===----------------------------------------------------------------------===//
+
+// Reference: https://mlir.llvm.org/docs/DefiningDialects/Operations/
+// This section defines operations for our tiny dialect.
 
 class Tiny_Op<string mnemonic, list<Trait> traits = []> :
     Op<Tiny_Dialect, mnemonic, traits>;
