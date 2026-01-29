@@ -299,4 +299,23 @@ def TinyTile_LayoutCastOp : TinyTile_Op<"layout_cast", [Pure]> {
   let hasVerifier = 1;
 }
 
+def TinyTile_SplatOp : TinyTile_Op<"splat",
+    [Pure, DeclareOpInterfaceMethods<TinyTile_LayoutInterface>]> {
+  let summary = "Create a tile with all elements set to the same value.";
+  let description = [{
+    Creates a tile where all elements have the same f16 value.
+    The result type specifies the tile dimensions and optional layout.
+
+    Example:
+    ```mlir
+    %tile = tiny_tile.splat 1.0 : !tiny_tile.tile<32x16, #tiny_tile.layout<...>>
+    ```
+  }];
+
+  let arguments = (ins F64Attr:$splatValue);
+  let results = (outs TinyTile_Tile:$result);
+
+  let assemblyFormat = "$splatValue attr-dict `:` type($result)";
+}
+
 #endif // TINY_TILE_DIALECT

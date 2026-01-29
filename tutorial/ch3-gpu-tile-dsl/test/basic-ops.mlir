@@ -46,3 +46,10 @@ func.func @test_layout_cast(%tile: !tiny_tile.tile<32x16>) -> !tiny_tile.tile<32
       : !tiny_tile.tile<32x16> -> !tiny_tile.tile<32x16, #tiny_tile.layout<thread = [16, 4], vector_size = 8>>
   return %with_layout : !tiny_tile.tile<32x16, #tiny_tile.layout<thread = [16, 4], vector_size = 8>>
 }
+
+// CHECK-LABEL: func.func @test_splat
+func.func @test_splat() -> !tiny_tile.tile<32x16, #tiny_tile.layout<thread = [16, 4], vector_size = 8>> {
+  // CHECK: tiny_tile.splat 1.000000e+00
+  %tile = tiny_tile.splat 1.0 : !tiny_tile.tile<32x16, #tiny_tile.layout<thread = [16, 4], vector_size = 8>>
+  return %tile : !tiny_tile.tile<32x16, #tiny_tile.layout<thread = [16, 4], vector_size = 8>>
+}

@@ -92,14 +92,19 @@ static Value computeBaseOffset(OpBuilder &builder, Location loc, Value row,
 // Conversion patterns
 //===----------------------------------------------------------------------===//
 
-/// Convert tiny_tile.elementwise to tiny.addf/subf/mulf/divf.
+/// Lowers: tiny_tile.elementwise {add,sub,mul,div} %lhs, %rhs
+/// Produces:
+///   %result = tiny.{addf,subf,mulf,divf} %lhs, %rhs : vector<Vxf16>
+///
+/// The operands are already converted to per-thread vectors by the type
+/// converter; this pattern simply maps the elementwise kind to the
+/// corresponding tiny operation.
 struct ElementwiseOpLowering : public OpConversionPattern<ElementwiseOp> {
   using OpConversionPattern<ElementwiseOp>::OpConversionPattern;
 
   LogicalResult
   matchAndRewrite(ElementwiseOp op, OpAdaptor adaptor,
                   ConversionPatternRewriter &rewriter) const override {
-    Location loc = op.getLoc();
     Value lhs = adaptor.getLhs();
     Value rhs = adaptor.getRhs();
 
@@ -123,7 +128,18 @@ struct ElementwiseOpLowering : public OpConversionPattern<ElementwiseOp> {
   }
 };
 
-/// Convert tiny_tile.load to tiny.load with per-thread offset.
+/// Lowers: tiny_tile.load %ptr, %row, %col stride %stride
+/// Produces:
+///   %base = arith.muli %row, %stride
+///   %base_off = arith.addi %base, %col
+///   %tid_x = gpu.thread_id x
+///   %tid_y = gpu.thread_id y
+///   %linear_tid = arith.addi %tid_x, (arith.muli %tid_y, thread[0])
+///   %thread_off = arith.muli %linear_tid, vector_size
+///   %offset = arith.addi %base_off, %thread_off
+///   %result = tiny.load %ptr, %offset : vector<Vxf16>
+///
+/// Computes the per-thread memory offset based on layout parameters.
 struct LoadOpLowering : public OpConversionPattern<LoadOp> {
   using OpConversionPattern<LoadOp>::OpConversionPattern;
 
@@ -159,7 +175,18 @@ struct LoadOpLowering : public OpConversionPattern<LoadOp> {
   }
 };
 
-/// Convert tiny_tile.store to tiny.store with per-thread offset.
+/// Lowers: tiny_tile.store %value, %ptr, %row, %col stride %stride
+/// Produces:
+///   %base = arith.muli %row, %stride
+///   %base_off = arith.addi %base, %col
+///   %tid_x = gpu.thread_id x
+///   %tid_y = gpu.thread_id y
+///   %linear_tid = arith.addi %tid_x, (arith.muli %tid_y, thread[0])
+///   %thread_off = arith.muli %linear_tid, vector_size
+///   %offset = arith.addi %base_off, %thread_off
+///   tiny.store %value, %ptr, %offset : vector<Vxf16>
+///
+/// Same offset computation as load, then stores the per-thread vector.
 struct StoreOpLowering : public OpConversionPattern<StoreOp> {
   using OpConversionPattern<StoreOp>::OpConversionPattern;
 
@@ -194,7 +221,14 @@ struct StoreOpLowering : public OpConversionPattern<StoreOp> {
   }
 };
 
-/// Convert tiny_tile.reduce to tiny.sum + gpu.all_reduce.
+/// Lowers: tiny_tile.reduce %tile
+/// Produces:
+///   %local = tiny.sum %tile : vector<Vxf16> -> vector<1xf16>
+///   %scalar = vector.extract %local[0] : f16
+///   %result = gpu.all_reduce add %scalar : f16
+///
+/// First reduces the per-thread vector locally, then performs a cross-thread
+/// reduction using gpu.all_reduce to sum across all threads in the workgroup.
 struct ReduceOpLowering : public OpConversionPattern<ReduceOp> {
   using OpConversionPattern<ReduceOp>::OpConversionPattern;
 
@@ -225,9 +259,12 @@ struct ReduceOpLowering : public OpConversionPattern<ReduceOp> {
   }
 };
 
-/// Convert tiny_tile.layout_cast - just forwards the value since layout is
-/// only a type annotation. After conversion, both input and output have the
-/// same vector type.
+/// Lowers: tiny_tile.layout_cast %input
+/// Produces: (no IR change - identity conversion)
+///
+/// Layout cast is purely a type-level annotation for layout propagation.
+/// After type conversion, both input and output become the same vector type,
+/// so this pattern simply forwards the converted input value.
 struct LayoutCastOpLowering : public OpConversionPattern<LayoutCastOp> {
   using OpConversionPattern<LayoutCastOp>::OpConversionPattern;
 
@@ -236,6 +273,39 @@ struct LayoutCastOpLowering : public OpConversionPattern<LayoutCastOp> {
                   ConversionPatternRewriter &rewriter) const override {
     // Simply forward the input - layout_cast is just a type annotation.
     rewriter.replaceOp(op, adaptor.getInput());
+    return success();
+  }
+};
+
+/// Lowers: tiny_tile.splat <value>
+/// Produces:
+///   %result = tiny.constant dense<<value>> : vector<Vxf16>
+///
+/// Creates a per-thread vector constant where all elements have the splat value.
+/// The vector size comes from the layout's vector_size parameter.
+struct SplatOpLowering : public OpConversionPattern<SplatOp> {
+  using OpConversionPattern<SplatOp>::OpConversionPattern;
+
+  LogicalResult
+  matchAndRewrite(SplatOp op, OpAdaptor adaptor,
+                  ConversionPatternRewriter &rewriter) const override {
+    // Get the tile type and its layout.
+    auto tileType = cast<TileType>(op.getResult().getType());
+    LayoutAttr layout = tileType.getLayout();
+    if (!layout) {
+      return op.emitError() << "splat requires tile with layout";
+    }
+
+    // Get the per-thread vector type.
+    VectorType vectorType = tileType.getPerThreadVectorType();
+
+    // Get the splat value (stored as f64) and convert to f16.
+    APFloat f64Value = op.getSplatValue();
+    bool losesInfo;
+    f64Value.convert(APFloat::IEEEhalf(), APFloat::rmNearestTiesToEven,
+                     &losesInfo);
+    auto splatAttr = DenseElementsAttr::get(vectorType, f64Value);
+    rewriter.replaceOpWithNewOp<tiny::ConstantOp>(op, splatAttr);
     return success();
   }
 };
@@ -265,8 +335,8 @@ public:
     // Set up rewrite patterns.
     RewritePatternSet patterns(&getContext());
     patterns.add<ElementwiseOpLowering, LoadOpLowering, StoreOpLowering,
-                 ReduceOpLowering, LayoutCastOpLowering>(typeConverter,
-                                                         &getContext());
+                 ReduceOpLowering, LayoutCastOpLowering, SplatOpLowering>(
+        typeConverter, &getContext());
 
     // Apply the conversion.
     if (failed(applyPartialConversion(getOperation(), target,

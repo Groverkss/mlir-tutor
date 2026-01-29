@@ -224,6 +224,23 @@ LogicalResult LayoutCastOp::verify() {
 }
 
 //===----------------------------------------------------------------------===//
+// SplatOp interface methods
+//===----------------------------------------------------------------------===//
+
+LayoutAttr SplatOp::inferResultLayout(unsigned resultIndex,
+                                         ArrayRef<LayoutAttr> operandLayouts) {
+  // Result layout comes from the result type (source of truth for constants).
+  auto resultType = cast<TileType>(getResult().getType());
+  return resultType.getLayout();
+}
+
+LayoutAttr SplatOp::inferOperandLayout(unsigned operandIndex,
+                                          ArrayRef<LayoutAttr> resultLayouts) {
+  // Constant has no tile operands, nothing to infer.
+  return nullptr;
+}
+
+//===----------------------------------------------------------------------===//
 // TableGen'd attribute definitions
 //===----------------------------------------------------------------------===//
 

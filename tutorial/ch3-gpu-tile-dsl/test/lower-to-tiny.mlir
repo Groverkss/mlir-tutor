@@ -29,3 +29,27 @@ func.func @lower_elementwise(%ptr: !tiny.ptr, %row: index, %col: index, %stride:
 
   return
 }
+
+// CHECK-LABEL: func.func @lower_reduce
+func.func @lower_reduce(%ptr: !tiny.ptr, %row: index, %col: index, %stride: index) -> f16 {
+  // Load tile with layout.
+  %a = tiny_tile.load %ptr, %row, %col stride %stride
+       : !tiny.ptr -> !tiny_tile.tile<32x16, #tiny_tile.layout<thread = [16, 4], vector_size = 8>>
+
+  // Reduce lowers to tiny.sum + vector.extract + gpu.all_reduce.
+  // CHECK: tiny.sum
+  // CHECK: vector.extract
+  // CHECK: gpu.all_reduce add
+  %sum = tiny_tile.reduce %a : !tiny_tile.tile<32x16, #tiny_tile.layout<thread = [16, 4], vector_size = 8>> -> f16
+  return %sum : f16
+}
+
+// CHECK-LABEL: func.func @lower_splat
+func.func @lower_splat(%ptr: !tiny.ptr, %row: index, %col: index, %stride: index) {
+  // Splat lowers to tiny.constant with per-thread vector size.
+  // CHECK: tiny.constant dense<1.000000e+00> : vector<8xf16>
+  %tile = tiny_tile.splat 1.0 : !tiny_tile.tile<32x16, #tiny_tile.layout<thread = [16, 4], vector_size = 8>>
+  tiny_tile.store %tile, %ptr, %row, %col stride %stride
+       : !tiny_tile.tile<32x16, #tiny_tile.layout<thread = [16, 4], vector_size = 8>>, !tiny.ptr
+  return
+}
