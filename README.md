@@ -32,3 +32,29 @@ cmake ../ -DCMAKE_PREFIX_PATH=$(python -m mlir_wheel --root-dir)
 ```bash
 make -j
 ```
+
+## Running Python Examples
+
+1. Install the Python DSL package (editable mode):
+
+```bash
+pip install -e python/
+```
+
+2. Set the `TUTORIAL_OPT` environment variable to point to the built `tutorial-opt` binary:
+
+```bash
+export TUTORIAL_OPT=$PWD/build/tutorial/tutorial-opt
+```
+
+3. Run an example:
+
+```bash
+# Chapter 1: Vectorized square
+python examples/ch1/ch1_square.py
+
+# Chapter 2: Matrix multiplication with loops
+python examples/ch2/ch2_matmul.py
+```
+
+The examples will print the generated MLIR at each lowering stage (Tiny dialect → SCF/Arith → LLVM).
