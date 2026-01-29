@@ -55,6 +55,9 @@ python examples/ch1/ch1_square.py
 
 # Chapter 2: Matrix multiplication with loops
 python examples/ch2/ch2_matmul.py
+
+# Chapter 3: GPU tile operations
+python examples/ch3/ch3_tile_elemwise.py
 ```
 
-The examples will print the generated MLIR at each lowering stage (Tiny dialect → SCF/Arith → LLVM).
+The examples will print the generated MLIR at each lowering stage.
