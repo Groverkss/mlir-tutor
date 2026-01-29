@@ -155,11 +155,11 @@ def compile_and_print(fn):
     print("=== Tiny Dialect ===")
     print(tiny_ir)
 
-    arith_ir = opt.run(tiny_ir, ["tiny-to-arith"])
+    arith_ir = opt.run(tiny_ir, ["tiny-to-arith", "canonicalize", "cse"])
     print("=== After tiny-to-arith ===")
     print(arith_ir)
 
-    llvm_ir = opt.run(tiny_ir, ["tiny-to-arith", "tiny-to-llvm", "convert-to-llvm"])
+    llvm_ir = opt.run(tiny_ir, ["tiny-to-arith", "canonicalize", "cse", "tiny-to-llvm", "convert-to-llvm"])
     print("=== LLVM Dialect ===")
     print(llvm_ir)
 

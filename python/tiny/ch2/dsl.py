@@ -115,7 +115,7 @@ def compile_and_print(fn):
     print(scf_ir)
 
     # Lower tiny ops -> arith
-    arith_ir = opt.run(scf_ir, ["tiny-to-arith"])
+    arith_ir = opt.run(scf_ir, ["tiny-to-arith", "canonicalize", "cse"])
     print("=== After tiny-to-arith ===")
     print(arith_ir)
 

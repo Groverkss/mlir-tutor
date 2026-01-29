@@ -153,11 +153,11 @@ def compile_and_print(fn):
     print("=== After layout propagation ===")
     print(layout_ir)
 
-    tiny_ir = opt.run(layout_ir, ["tiny-tile-to-tiny"])
+    tiny_ir = opt.run(layout_ir, ["tiny-tile-to-tiny", "canonicalize", "cse"])
     print("=== After tiny-tile-to-tiny ===")
     print(tiny_ir)
 
-    arith_ir = opt.run(tiny_ir, ["tiny-to-arith"])
+    arith_ir = opt.run(tiny_ir, ["tiny-to-arith", "canonicalize", "cse"])
     print("=== After tiny-to-arith ===")
     print(arith_ir)
 
