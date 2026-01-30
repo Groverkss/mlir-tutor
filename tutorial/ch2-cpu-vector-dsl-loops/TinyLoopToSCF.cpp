@@ -86,49 +86,10 @@ namespace {
 ///    automatically if there are no loop carried variables.
 ///
 /// 7. Replace the accumulate operation with the new scf.for operation.
-struct AccumulateOpLowering : public OpRewritePattern<AccumulateOp> {
-  using OpRewritePattern<AccumulateOp>::OpRewritePattern;
 
-  LogicalResult matchAndRewrite(AccumulateOp op,
-                                PatternRewriter &rewriter) const override {
-    Location loc = op.getLoc();
-    // Create the lower bound constant (always 0).
-    Value zero =
-        arith::ConstantOp::create(rewriter, loc, rewriter.getIndexAttr(0));
-    auto forOp = scf::ForOp::create(rewriter, loc, zero, op.getBound(),
-                                    op.getStep(), op.getInitArgs());
-
-    // Clone each operation to the forOp's body.
-    rewriter.setInsertionPointToStart(forOp.getBody());
-
-    IRMapping mapping;
-    for (int64_t i = 0; i < op.getBody()->getNumArguments(); ++i) {
-      mapping.map(op.getBody()->getArgument(i),
-                  forOp.getBody()->getArgument(i));
-    }
-
-    for (Operation &bodyOp : op.getBody()->getOperations()) {
-      if (isa<tiny_loop::YieldOp>(bodyOp)) {
-        continue;
-      }
-      rewriter.clone(bodyOp, mapping);
-    }
-
-    SmallVector<Value> newOperands;
-    for (Value val : op.getBody()->getTerminator()->getOperands()) {
-      newOperands.push_back(mapping.lookup(val));
-    }
-
-    if (!newOperands.empty()) {
-      scf::YieldOp::create(rewriter, loc, newOperands);
-    }
-
-    // Replace the accumulate op results with the scf.for results.
-    rewriter.replaceOp(op, forOp.getResults());
-
-    return success();
-  }
-};
+// TODO: Implement AccumulateOpLowering pattern here
+// Follow the steps outlined in the comment block above.
+// Look at TinyToArith.cpp from ch1 for how to structure an OpRewritePattern.
 
 //===----------------------------------------------------------------------===//
 // TinyLoopToSCF pass implementation
@@ -137,17 +98,14 @@ struct AccumulateOpLowering : public OpRewritePattern<AccumulateOp> {
 class TinyLoopToSCFPass : public impl::TinyLoopToSCFBase<TinyLoopToSCFPass> {
 public:
   void runOnOperation() override {
-    // We implement this pass similar to ch1's TinyToArith pass. We
-    // will use the greedy pattern driver to write this. Feel free
-    // to copy the rewriter boilter plate from ch1's TinyToArith pass.
-
-    // Set up rewrite patterns.
-    RewritePatternSet patterns(&getContext());
-    patterns.add<AccumulateOpLowering>(&getContext());
-
-    // Apply patterns greedily to lower all matching operations.
-    if (failed(applyPatternsGreedily(getOperation(), std::move(patterns))))
-      signalPassFailure();
+    // TODO: Implement this pass similar to ch1's TinyToArith pass.
+    // Use the greedy pattern driver. Look at TinyToArith.cpp from ch1
+    // for how to set up the RewritePatternSet and apply patterns.
+    //
+    // Steps:
+    // 1. Create a RewritePatternSet
+    // 2. Add your AccumulateOpLowering pattern
+    // 3. Call applyPatternsGreedily
   }
 };
 
