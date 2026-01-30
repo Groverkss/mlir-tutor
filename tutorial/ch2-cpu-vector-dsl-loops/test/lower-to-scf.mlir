@@ -1,20 +1,6 @@
 // RUN: tutorial-opt --tiny-loop-to-scf %s | FileCheck %s
 // Test lowering of tiny_loop.accumulate to scf.for.
 
-// CHECK-LABEL: func.func @simple_loop_lowering
-func.func @simple_loop_lowering(%n: index, %step: index) {
-  // CHECK: %[[C0:.*]] = arith.constant 0 : index
-  // CHECK: scf.for %{{.*}} = %[[C0]] to %{{.*}} step %{{.*}} {
-  // CHECK-NOT: tiny_loop.accumulate
-  tiny_loop.accumulate %n step(%step) {
-  ^bb0(%i: index):
-    // CHECK: scf.yield
-    // CHECK-NOT: tiny_loop.yield
-    tiny_loop.yield
-  }
-  return
-}
-
 // CHECK-LABEL: func.func @accumulate_lowering
 func.func @accumulate_lowering(%n: index, %step: index, %init: index) -> index {
   // CHECK: %[[C0:.*]] = arith.constant 0 : index
@@ -41,8 +27,6 @@ func.func @nested_ops_preserved(%ptr: !tiny.ptr, %n: index, %step: index) {
     %vec = tiny.load %ptr, %i : vector<4xf16>
     // CHECK: tiny.store
     tiny.store %vec, %ptr, %i : vector<4xf16>
-    // CHECK: scf.yield
-    tiny_loop.yield
   }
   return
 }

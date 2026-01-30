@@ -88,6 +88,11 @@ the `tiny_loop.accumulate` operation to `scf.for` operation.
 
 There is psuedo-code to help you understand what should be emitted.
 
+Once done, try testing with `test/lower-to-scf.mlir` file, which should verify
+if the lowering works as expected. Note that if there is an error the flag
+`--mlir-print-ir-after-failure` helps see what the ir generated looks like if
+it failed, so you can debug what code you are producing.
+
 ### Challenge Excercise (Optional)
 
 Try adding a `tiny_loop.if_zero` operation and lowering it to `scf.if` operation.
