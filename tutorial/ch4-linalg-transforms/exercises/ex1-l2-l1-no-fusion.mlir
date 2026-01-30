@@ -49,40 +49,20 @@ func.func @matmul_bias(%A: tensor<128x256xf32>, %B: tensor<256x128xf32>,
 
 module attributes {transform.with_named_sequence} {
   transform.named_sequence @__transform_main(%arg0: !transform.any_op) {
-    // Step 1: Find the matmul (has reduction iterator)
-    %matmul = transform.structured.match ops{["linalg.generic"]}
-        attributes{iterator_types = [#linalg.iterator_type<parallel>,
-                                     #linalg.iterator_type<parallel>,
-                                     #linalg.iterator_type<reduction>]} in %arg0
-        : (!transform.any_op) -> !transform.any_op
-
-    // Step 2: Tile matmul with L2 sizes [64, 64, 32]
-    %matmul_l2, %m_loop, %n_loop, %k_loop = transform.structured.tile_using_for %matmul
-        tile_sizes [64, 64, 32]
-        : (!transform.any_op)
-        -> (!transform.any_op, !transform.any_op, !transform.any_op, !transform.any_op)
-
-    // Step 3: Tile matmul with L1 sizes [16, 16, 8]
-    %matmul_l1, %m_l1, %n_l1, %k_l1 = transform.structured.tile_using_for %matmul_l2
-        tile_sizes [16, 16, 8]
-        : (!transform.any_op)
-        -> (!transform.any_op, !transform.any_op, !transform.any_op, !transform.any_op)
-
-    // Step 4: Find the add (only parallel iterators)
-    %add = transform.structured.match ops{["linalg.generic"]}
-        attributes{iterator_types = [#linalg.iterator_type<parallel>,
-                                     #linalg.iterator_type<parallel>]} in %arg0
-        : (!transform.any_op) -> !transform.any_op
-
-    // Step 5: Tile add with L2 sizes [64, 64]
-    %add_l2, %i_loop, %j_loop = transform.structured.tile_using_for %add
-        tile_sizes [64, 64]
-        : (!transform.any_op) -> (!transform.any_op, !transform.any_op, !transform.any_op)
-
-    // Step 6: Tile add with L1 sizes [16, 16]
-    %add_l1, %i_l1, %j_l1 = transform.structured.tile_using_for %add_l2
-        tile_sizes [16, 16]
-        : (!transform.any_op) -> (!transform.any_op, !transform.any_op, !transform.any_op)
+    // TODO: Implement L2/L1 tiling without fusion
+    //
+    // Steps:
+    // 1. Match the matmul (has reduction iterator)
+    // 2. Tile matmul with L2 sizes [64, 64, 32] using transform.structured.tile_using_for
+    // 3. Tile matmul again with L1 sizes [16, 16, 8]
+    // 4. Match the add (only parallel iterators)
+    // 5. Tile add with L2 sizes [64, 64]
+    // 6. Tile add again with L1 sizes [16, 16]
+    //
+    // Hints:
+    // - Use transform.structured.match to find operations
+    // - Use transform.structured.tile_using_for for tiling
+    // - See examples/02-tile-single-op.mlir for reference
 
     transform.yield
   }

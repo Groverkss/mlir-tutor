@@ -51,65 +51,22 @@ func.func @matmul_bias(%A: tensor<128x256xf32>, %B: tensor<256x128xf32>,
 
 module attributes {transform.with_named_sequence} {
   transform.named_sequence @__transform_main(%arg0: !transform.any_op) {
-    // Step 1: Find the add (consumer) - it has only parallel iterators
-    %add = transform.structured.match ops{["linalg.generic"]}
-        attributes{iterator_types = [#linalg.iterator_type<parallel>,
-                                     #linalg.iterator_type<parallel>]} in %arg0
-        : (!transform.any_op) -> !transform.any_op
-
-    // Step 2: Tile add with L2 sizes [64, 64] using scf.forall (parallel)
-    %tiled_add, %forall = transform.structured.tile_using_forall %add
-        tile_sizes [64, 64]
-        : (!transform.any_op) -> (!transform.any_op, !transform.any_op)
-
-    // Step 3: Find matmul (producer of add)
-    %matmul = transform.structured.match ops{["linalg.generic"]}
-        attributes{iterator_types = [#linalg.iterator_type<parallel>,
-                                     #linalg.iterator_type<parallel>,
-                                     #linalg.iterator_type<reduction>]} in %arg0
-        : (!transform.any_op) -> !transform.any_op
-
-    // Step 4: Fuse matmul into the forall
-    %fused_matmul, %new_forall = transform.structured.fuse_into_containing_op
-        %matmul into %forall
-        : (!transform.any_op, !transform.any_op) -> (!transform.any_op, !transform.any_op)
-
-    // Step 5: Find and fuse fill (producer of matmul)
-    %fill = transform.structured.match ops{["linalg.fill"]} in %arg0
-        : (!transform.any_op) -> !transform.any_op
-    %fused_fill, %final_forall = transform.structured.fuse_into_containing_op
-        %fill into %new_forall
-        : (!transform.any_op, !transform.any_op) -> (!transform.any_op, !transform.any_op)
-
-    // Step 6: Tile reduction dimension of the fused matmul with L2 size [32]
-    %inner_matmul = transform.structured.match ops{["linalg.generic"]}
-        attributes{iterator_types = [#linalg.iterator_type<parallel>,
-                                     #linalg.iterator_type<parallel>,
-                                     #linalg.iterator_type<reduction>]} in %final_forall
-        : (!transform.any_op) -> !transform.any_op
-    %matmul_k_tiled, %k_loop = transform.structured.tile_using_for %inner_matmul
-        tile_sizes [0, 0, 32]
-        : (!transform.any_op) -> (!transform.any_op, !transform.any_op)
-
-    // Step 7: Tile matmul with L1 sizes [16, 16, 8]
-    %matmul_for_l1 = transform.structured.match ops{["linalg.generic"]}
-        attributes{iterator_types = [#linalg.iterator_type<parallel>,
-                                     #linalg.iterator_type<parallel>,
-                                     #linalg.iterator_type<reduction>]} in %k_loop
-        : (!transform.any_op) -> !transform.any_op
-    %matmul_l1, %m_l1, %n_l1, %k_l1 = transform.structured.tile_using_for %matmul_for_l1
-        tile_sizes [16, 16, 8]
-        : (!transform.any_op)
-        -> (!transform.any_op, !transform.any_op, !transform.any_op, !transform.any_op)
-
-    // Step 8: Tile add with L1 sizes [16, 16]
-    %add_for_l1 = transform.structured.match ops{["linalg.generic"]}
-        attributes{iterator_types = [#linalg.iterator_type<parallel>,
-                                     #linalg.iterator_type<parallel>]} in %final_forall
-        : (!transform.any_op) -> !transform.any_op
-    %add_l1, %i_l1, %j_l1 = transform.structured.tile_using_for %add_for_l1
-        tile_sizes [16, 16]
-        : (!transform.any_op) -> (!transform.any_op, !transform.any_op, !transform.any_op)
+    // TODO: Implement L2/L1 tiling with fusion
+    //
+    // Steps:
+    // 1. Match the add (consumer) - it has only parallel iterators
+    // 2. Tile add with L2 sizes [64, 64] using transform.structured.tile_using_forall
+    // 3. Match and fuse matmul (producer) into the forall
+    // 4. Match and fuse fill (matmul's producer) into the forall
+    // 5. Tile reduction dimension of matmul with [0, 0, 32]
+    // 6. Tile matmul with L1 sizes [16, 16, 8]
+    // 7. Tile add with L1 sizes [16, 16]
+    //
+    // Hints:
+    // - Tile the CONSUMER first, then fuse producers
+    // - Use transform.structured.tile_using_forall for parallel tiling
+    // - Use transform.structured.fuse_into_containing_op for fusion
+    // - See examples/03-tile-and-fuse.mlir for reference
 
     transform.yield
   }
