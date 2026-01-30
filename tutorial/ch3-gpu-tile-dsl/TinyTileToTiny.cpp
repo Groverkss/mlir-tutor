@@ -48,211 +48,19 @@ public:
 };
 
 //===----------------------------------------------------------------------===//
-// Helper functions
+// Generic interface-based conversion pattern
 //===----------------------------------------------------------------------===//
 
-/// Compute the per-thread offset within a tile based on thread IDs and layout.
-///
-/// Given layout {thread=[rows, cols], vector_size=vs}:
-///   linear_tid = tid_y * rows + tid_x
-///   thread_offset = linear_tid * vs
-static Value computeThreadOffset(OpBuilder &builder, Location loc,
-                                 LayoutAttr layout) {
-  // Get thread IDs.
-  Value tidX = gpu::ThreadIdOp::create(builder, loc, gpu::Dimension::x);
-  Value tidY = gpu::ThreadIdOp::create(builder, loc, gpu::Dimension::y);
-
-  // Get layout parameters.
-  ArrayRef<int64_t> threadDims = layout.getThread();
-  int64_t threadRows = threadDims[0];
-  int64_t vectorSize = layout.getVectorSize();
-
-  // Compute linear thread ID: tid_y * thread[0] + tid_x
-  Value threadRowsConst =
-      arith::ConstantOp::create(builder, loc, builder.getIndexAttr(threadRows));
-  Value linearTid = arith::AddIOp::create(
-      builder, loc, tidX,
-      arith::MulIOp::create(builder, loc, tidY, threadRowsConst));
-
-  // Compute thread offset: linear_tid * vector_size
-  Value vectorSizeConst =
-      arith::ConstantOp::create(builder, loc, builder.getIndexAttr(vectorSize));
-  return arith::MulIOp::create(builder, loc, linearTid, vectorSizeConst);
-}
-
-/// Compute the base offset in memory: row * stride + col.
-static Value computeBaseOffset(OpBuilder &builder, Location loc, Value row,
-                               Value col, Value stride) {
-  Value rowOffset = arith::MulIOp::create(builder, loc, row, stride);
-  return arith::AddIOp::create(builder, loc, rowOffset, col);
-}
-
-//===----------------------------------------------------------------------===//
-// Conversion patterns
-//===----------------------------------------------------------------------===//
-
-/// Lowers: tiny_tile.elementwise {add,sub,mul,div} %lhs, %rhs
-/// Produces:
-///   %result = tiny.{addf,subf,mulf,divf} %lhs, %rhs : vector<Vxf16>
-struct ElementwiseOpLowering : public OpConversionPattern<ElementwiseOp> {
-  using OpConversionPattern<ElementwiseOp>::OpConversionPattern;
+/// A generic pattern that converts any operation implementing
+/// TinyTileLoweringOpInterface by calling its convertToSIMT method.
+struct TinyTileLoweringPattern
+    : public OpInterfaceConversionPattern<TinyTileLoweringOpInterface> {
+  using OpInterfaceConversionPattern::OpInterfaceConversionPattern;
 
   LogicalResult
-  matchAndRewrite(ElementwiseOp op, OpAdaptor adaptor,
+  matchAndRewrite(TinyTileLoweringOpInterface op, ArrayRef<Value> operands,
                   ConversionPatternRewriter &rewriter) const override {
-    Value lhs = adaptor.getLhs();
-    Value rhs = adaptor.getRhs();
-
-    switch (op.getKind()) {
-    case ElementwiseKind::add:
-      rewriter.replaceOpWithNewOp<tiny::AddFOp>(op, lhs, rhs);
-      break;
-    case ElementwiseKind::sub:
-      rewriter.replaceOpWithNewOp<tiny::SubFOp>(op, lhs, rhs);
-      break;
-    case ElementwiseKind::mul:
-      rewriter.replaceOpWithNewOp<tiny::MulFOp>(op, lhs, rhs);
-      break;
-    case ElementwiseKind::div:
-      rewriter.replaceOpWithNewOp<tiny::DivFOp>(op, lhs, rhs);
-      break;
-    }
-
-    return success();
-  }
-};
-
-/// Lowers: tiny_tile.load %ptr, %row, %col stride %stride
-/// Produces:
-///   %base_off = row * stride + col
-///   %thread_off = linear_tid * vector_size
-///   %offset = base_off + thread_off
-///   %result = tiny.load %ptr, %offset : vector<Vxf16>
-struct LoadOpLowering : public OpConversionPattern<LoadOp> {
-  using OpConversionPattern<LoadOp>::OpConversionPattern;
-
-  LogicalResult
-  matchAndRewrite(LoadOp op, OpAdaptor adaptor,
-                  ConversionPatternRewriter &rewriter) const override {
-    Location loc = op.getLoc();
-
-    auto tileType = cast<TileType>(op.getResult().getType());
-    LayoutAttr layout = tileType.getLayout();
-
-    // Compute base offset: row * stride + col.
-    Value baseOffset = computeBaseOffset(rewriter, loc, adaptor.getRow(),
-                                         adaptor.getCol(), adaptor.getStride());
-
-    // Compute per-thread offset.
-    Value threadOffset = computeThreadOffset(rewriter, loc, layout);
-
-    // Final offset = base + thread_offset.
-    Value finalOffset =
-        arith::AddIOp::create(rewriter, loc, baseOffset, threadOffset);
-
-    // Create tiny.load with the computed offset.
-    VectorType vectorType = tileType.getPerThreadVectorType();
-    rewriter.replaceOpWithNewOp<tiny::LoadOp>(op, vectorType, adaptor.getPtr(),
-                                              finalOffset);
-
-    return success();
-  }
-};
-
-/// Lowers: tiny_tile.store %value, %ptr, %row, %col stride %stride
-/// Produces:
-///   %base_off = row * stride + col
-///   %thread_off = linear_tid * vector_size
-///   %offset = base_off + thread_off
-///   tiny.store %value, %ptr, %offset : vector<Vxf16>
-struct StoreOpLowering : public OpConversionPattern<StoreOp> {
-  using OpConversionPattern<StoreOp>::OpConversionPattern;
-
-  LogicalResult
-  matchAndRewrite(StoreOp op, OpAdaptor adaptor,
-                  ConversionPatternRewriter &rewriter) const override {
-    Location loc = op.getLoc();
-
-    auto tileType = cast<TileType>(op.getValue().getType());
-    LayoutAttr layout = tileType.getLayout();
-
-    // Compute base offset: row * stride + col.
-    Value baseOffset = computeBaseOffset(rewriter, loc, adaptor.getRow(),
-                                         adaptor.getCol(), adaptor.getStride());
-
-    // Compute per-thread offset.
-    Value threadOffset = computeThreadOffset(rewriter, loc, layout);
-
-    // Final offset = base + thread_offset.
-    Value finalOffset =
-        arith::AddIOp::create(rewriter, loc, baseOffset, threadOffset);
-
-    // Create tiny.store with the computed offset.
-    rewriter.replaceOpWithNewOp<tiny::StoreOp>(op, adaptor.getValue(),
-                                               adaptor.getPtr(), finalOffset);
-
-    return success();
-  }
-};
-
-/// Lowers: tiny_tile.sum %tile
-/// Produces:
-///   %local = tiny.sum %tile : vector<Vxf16> -> vector<1xf16>
-///   %scalar = vector.extract %local[0] : f16
-///   %global = gpu.all_reduce add %scalar : f16
-///   %result = vector.broadcast %global : f16 to vector<1xf16>
-struct SumOpLowering : public OpConversionPattern<SumOp> {
-  using OpConversionPattern<SumOp>::OpConversionPattern;
-
-  LogicalResult
-  matchAndRewrite(SumOp op, OpAdaptor adaptor,
-                  ConversionPatternRewriter &rewriter) const override {
-    Location loc = op.getLoc();
-
-    // First, reduce the per-thread vector to a scalar using tiny.sum.
-    VectorType vec1Type = VectorType::get({1}, rewriter.getF16Type());
-    Value localSum =
-        tiny::SumOp::create(rewriter, loc, vec1Type, adaptor.getInput());
-
-    // Extract the scalar from vector<1xf16>.
-    Value scalar = vector::ExtractOp::create(rewriter, loc, localSum,
-                                             ArrayRef<int64_t>{0});
-
-    // Perform cross-thread reduction using gpu.subgroup_reduce.
-    Value subgroupSum = gpu::SubgroupReduceOp::create(
-        rewriter, loc, scalar, gpu::AllReduceOperation::ADD, /*uniform=*/true);
-
-    // Wrap result back to vector<1xf16> for compatibility with tiny.store.
-    Value result =
-        vector::BroadcastOp::create(rewriter, loc, vec1Type, subgroupSum);
-
-    rewriter.replaceOp(op, result);
-    return success();
-  }
-};
-
-/// Lowers: tiny_tile.splat <value>
-/// Produces:
-///   %result = tiny.constant dense<<value>> : vector<Vxf16>
-struct SplatOpLowering : public OpConversionPattern<SplatOp> {
-  using OpConversionPattern<SplatOp>::OpConversionPattern;
-
-  LogicalResult
-  matchAndRewrite(SplatOp op, OpAdaptor adaptor,
-                  ConversionPatternRewriter &rewriter) const override {
-    auto tileType = cast<TileType>(op.getResult().getType());
-
-    // Get the per-thread vector type.
-    VectorType vectorType = tileType.getPerThreadVectorType();
-
-    // Get the splat value (stored as f64) and convert to f16.
-    APFloat f64Value = op.getSplatValue();
-    bool losesInfo;
-    f64Value.convert(APFloat::IEEEhalf(), APFloat::rmNearestTiesToEven,
-                     &losesInfo);
-    auto splatAttr = DenseElementsAttr::get(vectorType, f64Value);
-    rewriter.replaceOpWithNewOp<tiny::ConstantOp>(op, splatAttr);
-    return success();
+    return op.convertToSIMT(rewriter, operands);
   }
 };
 
@@ -282,8 +90,9 @@ public:
 
     // Set up rewrite patterns.
     RewritePatternSet patterns(&getContext());
-    patterns.add<ElementwiseOpLowering, LoadOpLowering, StoreOpLowering,
-                 SumOpLowering, SplatOpLowering>(typeConverter, &getContext());
+
+    // Single pattern handles all ops via the interface.
+    patterns.add<TinyTileLoweringPattern>(typeConverter, &getContext());
 
     // Add SCF structural type conversion patterns.
     scf::populateSCFStructuralTypeConversions(typeConverter, patterns);

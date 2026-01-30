@@ -16,6 +16,9 @@
 // Include the Tiny dialect for !tiny.ptr type.
 #include "ch1-cpu-vector-dsl/TinyDialect.h"
 
+// Include the lowering interface.
+#include "ch3-gpu-tile-dsl/TinyTileLoweringInterface.h"
+
 // Include the auto-generated dialect declaration.
 #include "ch3-gpu-tile-dsl/TinyTileOpsDialect.h.inc"
 

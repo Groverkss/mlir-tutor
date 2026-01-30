@@ -14,6 +14,7 @@ include "mlir/IR/AttrTypeBase.td"
 include "mlir/IR/EnumAttr.td"
 include "mlir/Interfaces/InferTypeOpInterface.td"
 include "mlir/Interfaces/SideEffectInterfaces.td"
+include "TinyTileLoweringInterface.td"
 
 // Type constraint for tiny.ptr from ch1 (for load/store operations).
 // This references the C++ type defined in ch1-cpu-vector-dsl/TinyDialect.h.
@@ -170,7 +171,8 @@ def TinyTile_ElementwiseKindAttr :
 // Operations
 //===----------------------------------------------------------------------===//
 
-def TinyTile_ElementwiseOp : TinyTile_Op<"elementwise", [Pure]> {
+def TinyTile_ElementwiseOp : TinyTile_Op<"elementwise",
+    [Pure, DeclareOpInterfaceMethods<TinyTileLoweringOpInterface>]> {
   let summary = "Element-wise binary operation on tiles.";
   let description = [{
     Performs an element-wise binary operation on two tiles.
@@ -207,7 +209,8 @@ def TinyTile_Vec1F16 : Type<
   "VectorType"
 >;
 
-def TinyTile_SumOp : TinyTile_Op<"sum", [Pure]> {
+def TinyTile_SumOp : TinyTile_Op<"sum",
+    [Pure, DeclareOpInterfaceMethods<TinyTileLoweringOpInterface>]> {
   let summary = "Sum all elements of a tile to a vector<1xf16>.";
   let description = [{
     Sums all elements of a tile using addition, producing a vector<1xf16>.
@@ -226,7 +229,8 @@ def TinyTile_SumOp : TinyTile_Op<"sum", [Pure]> {
   let assemblyFormat = "$input attr-dict `:` type($input) `->` type($result)";
 }
 
-def TinyTile_LoadOp : TinyTile_Op<"load"> {
+def TinyTile_LoadOp : TinyTile_Op<"load",
+    [DeclareOpInterfaceMethods<TinyTileLoweringOpInterface>]> {
   let summary = "Load a tile from memory.";
   let description = [{
     Loads a tile from memory at the given pointer with row and column offsets.
@@ -251,7 +255,8 @@ def TinyTile_LoadOp : TinyTile_Op<"load"> {
   let assemblyFormat = "$ptr `,` $row `,` $col `stride` $stride attr-dict `:` type($ptr) `->` type($result)";
 }
 
-def TinyTile_StoreOp : TinyTile_Op<"store"> {
+def TinyTile_StoreOp : TinyTile_Op<"store",
+    [DeclareOpInterfaceMethods<TinyTileLoweringOpInterface>]> {
   let summary = "Store a tile to memory.";
   let description = [{
     Stores a tile to memory at the given pointer with row and column offsets.
@@ -275,7 +280,8 @@ def TinyTile_StoreOp : TinyTile_Op<"store"> {
   let assemblyFormat = "$value `,` $ptr `,` $row `,` $col `stride` $stride attr-dict `:` type($value) `,` type($ptr)";
 }
 
-def TinyTile_SplatOp : TinyTile_Op<"splat", [Pure]> {
+def TinyTile_SplatOp : TinyTile_Op<"splat",
+    [Pure, DeclareOpInterfaceMethods<TinyTileLoweringOpInterface>]> {
   let summary = "Create a tile with all elements set to the same value.";
   let description = [{
     Creates a tile where all elements have the same f16 value.

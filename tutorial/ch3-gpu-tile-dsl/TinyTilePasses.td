@@ -24,8 +24,6 @@ def TinyTileToTiny : Pass<"tiny-tile-to-tiny"> {
     - `tiny_tile.load` -> `tiny.load` with computed per-thread offset
     - `tiny_tile.store` -> `tiny.store` with computed per-thread offset
     - `tiny_tile.sum` -> `tiny.sum` + `gpu.all_reduce` + `vector.broadcast` for cross-thread reduction
-
-    This pass should be run inside a `gpu.launch` region.
   }];
 
   let dependentDialects = [

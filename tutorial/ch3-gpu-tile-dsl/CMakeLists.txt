@@ -2,6 +2,12 @@
 # Chapter 3: GPU Tile DSL (TinyTile dialect)
 #===----------------------------------------------------------------------===#
 
+# Generate interface definitions.
+set(LLVM_TARGET_DEFINITIONS TinyTileLoweringInterface.td)
+mlir_tablegen(TinyTileLoweringInterface.h.inc -gen-op-interface-decls)
+mlir_tablegen(TinyTileLoweringInterface.cpp.inc -gen-op-interface-defs)
+add_public_tablegen_target(TinyTileLoweringInterfaceIncGen)
+
 # Generate dialect, types, attributes, and operation definitions.
 set(LLVM_TARGET_DEFINITIONS TinyTileDialect.td)
 mlir_tablegen(TinyTileOps.h.inc -gen-op-decls)
@@ -27,6 +33,7 @@ add_mlir_library(TinyTileDialect
   TinyTileToTiny.cpp
 
   DEPENDS
+  TinyTileLoweringInterfaceIncGen
   TinyTileOpsIncGen
   TinyTilePassesIncGen
 

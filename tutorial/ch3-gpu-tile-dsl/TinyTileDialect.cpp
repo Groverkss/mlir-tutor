@@ -6,10 +6,16 @@
 
 #include "ch3-gpu-tile-dsl/TinyTileDialect.h"
 
+#include "mlir/Dialect/Arith/IR/Arith.h"
+#include "mlir/Dialect/GPU/IR/GPUDialect.h"
+#include "mlir/Dialect/Vector/IR/VectorOps.h"
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/DialectImplementation.h"
 #include "llvm/ADT/TypeSwitch.h"
 #include "llvm/Support/MathExtras.h"
+
+// Include the auto-generated interface definitions.
+#include "ch3-gpu-tile-dsl/TinyTileLoweringInterface.cpp.inc"
 
 using namespace mlir;
 using namespace mlir::tiny_tile;
@@ -213,3 +219,175 @@ void TileType::print(AsmPrinter &printer) const {
 
 #define GET_OP_CLASSES
 #include "ch3-gpu-tile-dsl/TinyTileOps.cpp.inc"
+
+//===----------------------------------------------------------------------===//
+// Helper functions for SIMT conversion
+//===----------------------------------------------------------------------===//
+
+namespace {
+
+/// Compute the per-thread offset within a tile based on thread IDs and layout.
+///
+/// Given layout {thread=[rows, cols], vector_size=vs}:
+///   linear_tid = tid_y * rows + tid_x
+///   thread_offset = linear_tid * vs
+static Value computeThreadOffset(OpBuilder &builder, Location loc,
+                                 LayoutAttr layout) {
+  // Get thread IDs.
+  Value tidX = gpu::ThreadIdOp::create(builder, loc, gpu::Dimension::x);
+  Value tidY = gpu::ThreadIdOp::create(builder, loc, gpu::Dimension::y);
+
+  // Get layout parameters.
+  ArrayRef<int64_t> threadDims = layout.getThread();
+  int64_t threadRows = threadDims[0];
+  int64_t vectorSize = layout.getVectorSize();
+
+  // Compute linear thread ID: tid_y * thread[0] + tid_x
+  Value threadRowsConst =
+      arith::ConstantOp::create(builder, loc, builder.getIndexAttr(threadRows));
+  Value linearTid = arith::AddIOp::create(
+      builder, loc, tidX,
+      arith::MulIOp::create(builder, loc, tidY, threadRowsConst));
+
+  // Compute thread offset: linear_tid * vector_size
+  Value vectorSizeConst =
+      arith::ConstantOp::create(builder, loc, builder.getIndexAttr(vectorSize));
+  return arith::MulIOp::create(builder, loc, linearTid, vectorSizeConst);
+}
+
+/// Compute the base offset in memory: row * stride + col.
+static Value computeBaseOffset(OpBuilder &builder, Location loc, Value row,
+                               Value col, Value stride) {
+  Value rowOffset = arith::MulIOp::create(builder, loc, row, stride);
+  return arith::AddIOp::create(builder, loc, rowOffset, col);
+}
+
+} // namespace
+
+//===----------------------------------------------------------------------===//
+// TinyTileLoweringOpInterface implementations
+//===----------------------------------------------------------------------===//
+
+LogicalResult ElementwiseOp::convertToSIMT(RewriterBase &rewriter,
+                                           ValueRange simtOperands) {
+  Value lhs = simtOperands[0];
+  Value rhs = simtOperands[1];
+
+  switch (getKind()) {
+  case ElementwiseKind::add:
+    rewriter.replaceOpWithNewOp<tiny::AddFOp>(*this, lhs, rhs);
+    break;
+  case ElementwiseKind::sub:
+    rewriter.replaceOpWithNewOp<tiny::SubFOp>(*this, lhs, rhs);
+    break;
+  case ElementwiseKind::mul:
+    rewriter.replaceOpWithNewOp<tiny::MulFOp>(*this, lhs, rhs);
+    break;
+  case ElementwiseKind::div:
+    rewriter.replaceOpWithNewOp<tiny::DivFOp>(*this, lhs, rhs);
+    break;
+  }
+
+  return success();
+}
+
+LogicalResult LoadOp::convertToSIMT(RewriterBase &rewriter,
+                                    ValueRange simtOperands) {
+  Location loc = getLoc();
+  auto tileType = cast<TileType>(getResult().getType());
+  LayoutAttr layout = tileType.getLayout();
+
+  // simtOperands: [ptr, row, col, stride]
+  Value ptr = simtOperands[0];
+  Value row = simtOperands[1];
+  Value col = simtOperands[2];
+  Value stride = simtOperands[3];
+
+  // Compute base offset: row * stride + col.
+  Value baseOffset = computeBaseOffset(rewriter, loc, row, col, stride);
+
+  // Compute per-thread offset.
+  Value threadOffset = computeThreadOffset(rewriter, loc, layout);
+
+  // Final offset = base + thread_offset.
+  Value finalOffset =
+      arith::AddIOp::create(rewriter, loc, baseOffset, threadOffset);
+
+  // Create tiny.load with the computed offset.
+  VectorType vectorType = tileType.getPerThreadVectorType();
+  rewriter.replaceOpWithNewOp<tiny::LoadOp>(*this, vectorType, ptr,
+                                            finalOffset);
+
+  return success();
+}
+
+LogicalResult StoreOp::convertToSIMT(RewriterBase &rewriter,
+                                     ValueRange simtOperands) {
+  Location loc = getLoc();
+  auto tileType = cast<TileType>(getValue().getType());
+  LayoutAttr layout = tileType.getLayout();
+
+  // simtOperands: [value, ptr, row, col, stride]
+  Value value = simtOperands[0];
+  Value ptr = simtOperands[1];
+  Value row = simtOperands[2];
+  Value col = simtOperands[3];
+  Value stride = simtOperands[4];
+
+  // Compute base offset: row * stride + col.
+  Value baseOffset = computeBaseOffset(rewriter, loc, row, col, stride);
+
+  // Compute per-thread offset.
+  Value threadOffset = computeThreadOffset(rewriter, loc, layout);
+
+  // Final offset = base + thread_offset.
+  Value finalOffset =
+      arith::AddIOp::create(rewriter, loc, baseOffset, threadOffset);
+
+  // Create tiny.store with the computed offset.
+  rewriter.replaceOpWithNewOp<tiny::StoreOp>(*this, value, ptr, finalOffset);
+
+  return success();
+}
+
+LogicalResult SumOp::convertToSIMT(RewriterBase &rewriter,
+                                   ValueRange simtOperands) {
+  Location loc = getLoc();
+  Value input = simtOperands[0];
+
+  // First, reduce the per-thread vector to a scalar using tiny.sum.
+  VectorType vec1Type = VectorType::get({1}, rewriter.getF16Type());
+  Value localSum = tiny::SumOp::create(rewriter, loc, vec1Type, input);
+
+  // Extract the scalar from vector<1xf16>.
+  Value scalar =
+      vector::ExtractOp::create(rewriter, loc, localSum, ArrayRef<int64_t>{0});
+
+  // Perform cross-thread reduction using gpu.subgroup_reduce.
+  Value subgroupSum = gpu::SubgroupReduceOp::create(
+      rewriter, loc, scalar, gpu::AllReduceOperation::ADD, /*uniform=*/true);
+
+  // Wrap result back to vector<1xf16> for compatibility with tiny.store.
+  Value result =
+      vector::BroadcastOp::create(rewriter, loc, vec1Type, subgroupSum);
+
+  rewriter.replaceOp(*this, result);
+  return success();
+}
+
+LogicalResult SplatOp::convertToSIMT(RewriterBase &rewriter,
+                                     ValueRange simtOperands) {
+  auto tileType = cast<TileType>(getResult().getType());
+
+  // Get the per-thread vector type.
+  VectorType vectorType = tileType.getPerThreadVectorType();
+
+  // Get the splat value (stored as f64) and convert to f16.
+  APFloat f64Value = getSplatValue();
+  bool losesInfo;
+  f64Value.convert(APFloat::IEEEhalf(), APFloat::rmNearestTiesToEven,
+                   &losesInfo);
+  auto splatAttr = DenseElementsAttr::get(vectorType, f64Value);
+  rewriter.replaceOpWithNewOp<tiny::ConstantOp>(*this, splatAttr);
+  return success();
+}
