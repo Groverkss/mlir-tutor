@@ -33,11 +33,12 @@ cmake ../ -DCMAKE_PREFIX_PATH=$(python -m mlir_wheel --root-dir) -DLLVM_EXTERNAL
 make -j
 ```
 
-## Running Python Examples
+## Installing Python Package
 
 1. Install the Python DSL package (editable mode):
 
 ```bash
+# From project root directory (not the build directory).
 pip install -e python/
 ```
 

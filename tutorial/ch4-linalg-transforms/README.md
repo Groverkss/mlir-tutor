@@ -198,3 +198,7 @@ Run the tests from the build directory:
 ```bash
 make check-tutorial-ch4
 ```
+
+## Exercise Branch
+
+Switch to `ch4-exercise` branch to access the exercises for ch4.
