@@ -105,3 +105,81 @@ It describes a mapping from thread ids to a view of the tile:
 We implement 1 pass in this chapter:
 
 - TinyTileToTiny:
+
+We lower the tiny_tile operations to MLIR's tiny dialect (from ch1), using
+gpu thread intrinsics to compute per-thread offsets. The key insight is that
+each tile operation becomes a per-thread vector operation.
+
+The lowering uses an interface-based pattern (`TinyTileLoweringOpInterface`).
+Each tiny_tile operation implements a `convertToSIMT` method that handles its
+own lowering. This approach is cleaner than having separate patterns for each
+operation.
+
+We lower:
+
+- tiny_tile.splat -> tiny.constant (per-thread vector)
+- tiny_tile.elementwise add -> tiny.addf
+- tiny_tile.elementwise sub -> tiny.subf
+- tiny_tile.elementwise mul -> tiny.mulf
+- tiny_tile.elementwise div -> tiny.divf
+- tiny_tile.load -> gpu.thread_id + tiny.load (computes per-thread offset)
+- tiny_tile.store -> gpu.thread_id + tiny.store (computes per-thread offset)
+- tiny_tile.sum -> tiny.sum + vector.extract + gpu.subgroup_reduce + vector.broadcast
+
+The type converter converts `!tiny_tile.tile<HxW, layout>` to the per-thread
+vector type (e.g., `vector<8xf16>` for a layout with vector_size=8).
+
+## Playing around with the language
+
+Switch to the `main` branch. Make sure you have the python package installed
+as mentioned in ../../README.md
+
+Open `gpu_dot_product.py` and have a look at the python dsl code. Run the file
+with `python3 gpu_dot_product.py` to see the language lowering to SIMT code.
+
+You can use this as a playground to play around with the language and see what
+code is produced during the lowerings. This should get you a better
+understanding of what the operations look like and what the lowerings look
+like.
+
+Try modifying the tile layout or dimensions to see how the generated code
+changes.
+
+## Exercise Implementations
+
+Switch to `ch3-exercise` branch to access the exercises for ch3.
+
+### Exercise 1: TinyTileToTiny Lowering Interface
+
+Open the TinyTileDialect.td file. You will notice that some operations already
+declare the `TinyTileLoweringOpInterface`:
+
+- ElementwiseOp (already has interface + implementation)
+- SplatOp (already has interface + implementation)
+
+Your task is to:
+
+1. Add the `TinyTileLoweringOpInterface` to the remaining operations in
+   TinyTileDialect.td:
+   - LoadOp
+   - StoreOp
+   - SumOp
+
+2. Implement the `convertToSIMT` method for each operation in TinyTileDialect.cpp.
+   Look at the existing implementations for ElementwiseOp and SplatOp for
+   guidance on how to write the lowering.
+
+   The lowerings should produce:
+   - LoadOp -> gpu.thread_id + tiny.load (compute per-thread offset from layout)
+   - StoreOp -> gpu.thread_id + tiny.store (compute per-thread offset from layout)
+   - SumOp -> tiny.sum + vector.extract + gpu.subgroup_reduce + vector.broadcast
+
+Once done, try testing with `test/lower-to-tiny.mlir` file, which should verify
+if the lowering works as expected.
+
+### Challenge Exercise (Optional)
+
+Try implementing a `tiny_tile.matmul` operation that performs a tile-level
+matrix multiplication. The operation should take two tiles and produce a tile
+result. Think about how the layout affects the computation and how to lower
+it to per-thread operations.

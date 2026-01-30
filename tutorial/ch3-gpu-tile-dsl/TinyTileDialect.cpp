@@ -291,6 +291,31 @@ LogicalResult ElementwiseOp::convertToSIMT(RewriterBase &rewriter,
   return success();
 }
 
+/// Convert tiny_tile.load to tiny.load with per-thread offset computation.
+///
+/// The tile load needs to be converted to a per-thread vector load. Each thread
+/// loads a contiguous chunk of `vector_size` elements from the tile.
+///
+/// Input operands (simtOperands):
+///   [0] ptr    - base pointer (!tiny.ptr)
+///   [1] row    - row offset (index)
+///   [2] col    - column offset (index)
+///   [3] stride - row stride in elements (index)
+///
+/// Algorithm:
+///   1. Compute the base offset in the buffer: base_offset = row * stride + col
+///   2. Compute the per-thread offset within the tile:
+///      - Get thread IDs: tid_x = gpu.thread_id x, tid_y = gpu.thread_id y
+///      - Get layout params: thread[0], thread[1], vector_size from layout
+///      - linear_tid = tid_y * thread[0] + tid_x
+///      - thread_offset = linear_tid * vector_size
+///   3. Final offset = base_offset + thread_offset
+///   4. Create tiny.load with the final offset and per-thread vector type
+///
+/// Output:
+///   Replaces the tile load with a tiny.load that returns vector<Nxf16>
+///   where N = layout.vector_size
+///
 LogicalResult LoadOp::convertToSIMT(RewriterBase &rewriter,
                                     ValueRange simtOperands) {
   Location loc = getLoc();
@@ -321,6 +346,31 @@ LogicalResult LoadOp::convertToSIMT(RewriterBase &rewriter,
   return success();
 }
 
+/// Convert tiny_tile.store to tiny.store with per-thread offset computation.
+///
+/// The tile store needs to be converted to a per-thread vector store. Each
+/// thread stores its `vector_size` elements to the appropriate location.
+///
+/// Input operands (simtOperands):
+///   [0] value  - the per-thread vector to store (vector<Nxf16>)
+///   [1] ptr    - base pointer (!tiny.ptr)
+///   [2] row    - row offset (index)
+///   [3] col    - column offset (index)
+///   [4] stride - row stride in elements (index)
+///
+/// Algorithm:
+///   1. Compute the base offset in the buffer: base_offset = row * stride + col
+///   2. Compute the per-thread offset within the tile:
+///      - Get thread IDs: tid_x = gpu.thread_id x, tid_y = gpu.thread_id y
+///      - Get layout params: thread[0], thread[1], vector_size from layout
+///      - linear_tid = tid_y * thread[0] + tid_x
+///      - thread_offset = linear_tid * vector_size
+///   3. Final offset = base_offset + thread_offset
+///   4. Create tiny.store with the value and final offset
+///
+/// Output:
+///   Replaces the tile store with a tiny.store
+///
 LogicalResult StoreOp::convertToSIMT(RewriterBase &rewriter,
                                      ValueRange simtOperands) {
   Location loc = getLoc();
@@ -350,6 +400,26 @@ LogicalResult StoreOp::convertToSIMT(RewriterBase &rewriter,
   return success();
 }
 
+/// Convert tiny_tile.sum to a two-level reduction: local + cross-thread.
+///
+/// The tile sum reduces all elements across all threads to a single scalar.
+/// This requires two levels of reduction:
+///   1. Each thread reduces its local vector<Nxf16> to a scalar
+///   2. All threads combine their local sums via cross-thread reduction
+///
+/// Input operands (simtOperands):
+///   [0] input - the per-thread vector (vector<Nxf16>)
+///
+/// Algorithm:
+///   1. Reduce the per-thread vector to vector<1xf16> using tiny.sum
+///   2. Extract the scalar (f16) from vector<1xf16> using vector.extract
+///   3. Perform cross-thread reduction using gpu.subgroup_reduce with ADD
+///   4. Broadcast the scalar result back to vector<1xf16> using vector.broadcast
+///      (needed for compatibility with tiny.store which expects vector<1xf16>)
+///
+/// Output:
+///   Replaces the tile sum with a vector<1xf16> containing the total sum
+///
 LogicalResult SumOp::convertToSIMT(RewriterBase &rewriter,
                                    ValueRange simtOperands) {
   Location loc = getLoc();

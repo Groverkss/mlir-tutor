@@ -30,16 +30,55 @@ func.func @lower_elementwise(%ptr: !tiny.ptr, %row: index, %col: index, %stride:
   return
 }
 
+// CHECK-LABEL: func.func @lower_elementwise_sub
+func.func @lower_elementwise_sub(
+    %a: !tiny_tile.tile<32x16, #tiny_tile.layout<thread = [16, 4], vector_size = 8>>,
+    %b: !tiny_tile.tile<32x16, #tiny_tile.layout<thread = [16, 4], vector_size = 8>>)
+    -> !tiny_tile.tile<32x16, #tiny_tile.layout<thread = [16, 4], vector_size = 8>> {
+  // CHECK: tiny.subf
+  %c = tiny_tile.elementwise sub %a, %b
+       : !tiny_tile.tile<32x16, #tiny_tile.layout<thread = [16, 4], vector_size = 8>>,
+         !tiny_tile.tile<32x16, #tiny_tile.layout<thread = [16, 4], vector_size = 8>>
+      -> !tiny_tile.tile<32x16, #tiny_tile.layout<thread = [16, 4], vector_size = 8>>
+  return %c : !tiny_tile.tile<32x16, #tiny_tile.layout<thread = [16, 4], vector_size = 8>>
+}
+
+// CHECK-LABEL: func.func @lower_elementwise_mul
+func.func @lower_elementwise_mul(
+    %a: !tiny_tile.tile<32x16, #tiny_tile.layout<thread = [16, 4], vector_size = 8>>,
+    %b: !tiny_tile.tile<32x16, #tiny_tile.layout<thread = [16, 4], vector_size = 8>>)
+    -> !tiny_tile.tile<32x16, #tiny_tile.layout<thread = [16, 4], vector_size = 8>> {
+  // CHECK: tiny.mulf
+  %c = tiny_tile.elementwise mul %a, %b
+       : !tiny_tile.tile<32x16, #tiny_tile.layout<thread = [16, 4], vector_size = 8>>,
+         !tiny_tile.tile<32x16, #tiny_tile.layout<thread = [16, 4], vector_size = 8>>
+      -> !tiny_tile.tile<32x16, #tiny_tile.layout<thread = [16, 4], vector_size = 8>>
+  return %c : !tiny_tile.tile<32x16, #tiny_tile.layout<thread = [16, 4], vector_size = 8>>
+}
+
+// CHECK-LABEL: func.func @lower_elementwise_div
+func.func @lower_elementwise_div(
+    %a: !tiny_tile.tile<32x16, #tiny_tile.layout<thread = [16, 4], vector_size = 8>>,
+    %b: !tiny_tile.tile<32x16, #tiny_tile.layout<thread = [16, 4], vector_size = 8>>)
+    -> !tiny_tile.tile<32x16, #tiny_tile.layout<thread = [16, 4], vector_size = 8>> {
+  // CHECK: tiny.divf
+  %c = tiny_tile.elementwise div %a, %b
+       : !tiny_tile.tile<32x16, #tiny_tile.layout<thread = [16, 4], vector_size = 8>>,
+         !tiny_tile.tile<32x16, #tiny_tile.layout<thread = [16, 4], vector_size = 8>>
+      -> !tiny_tile.tile<32x16, #tiny_tile.layout<thread = [16, 4], vector_size = 8>>
+  return %c : !tiny_tile.tile<32x16, #tiny_tile.layout<thread = [16, 4], vector_size = 8>>
+}
+
 // CHECK-LABEL: func.func @lower_sum
 func.func @lower_sum(%ptr: !tiny.ptr, %row: index, %col: index, %stride: index) -> vector<1xf16> {
   // Load tile with layout.
   %a = tiny_tile.load %ptr, %row, %col stride %stride
        : !tiny.ptr -> !tiny_tile.tile<32x16, #tiny_tile.layout<thread = [16, 4], vector_size = 8>>
 
-  // Sum lowers to tiny.sum + vector.extract + gpu.all_reduce + vector.broadcast.
+  // Sum lowers to tiny.sum + vector.extract + gpu.subgroup_reduce + vector.broadcast.
   // CHECK: tiny.sum
   // CHECK: vector.extract
-  // CHECK: gpu.all_reduce add
+  // CHECK: gpu.subgroup_reduce add
   // CHECK: vector.broadcast
   %sum = tiny_tile.sum %a : !tiny_tile.tile<32x16, #tiny_tile.layout<thread = [16, 4], vector_size = 8>> -> vector<1xf16>
   return %sum : vector<1xf16>
