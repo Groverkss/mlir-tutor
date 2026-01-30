@@ -1,4 +1,4 @@
-// RUN: tutorial-opt --tiny-loop-to-scf %s | FileCheck %s
+// RUN: tutorial-opt --split-input-file --tiny-loop-to-scf %s | FileCheck %s
 // Test lowering of tiny_loop.accumulate to scf.for.
 
 // CHECK-LABEL: func.func @accumulate_lowering
@@ -16,6 +16,8 @@ func.func @accumulate_lowering(%n: index, %step: index, %init: index) -> index {
   return %result : index
 }
 
+// -----
+
 // CHECK-LABEL: func.func @nested_ops_preserved
 func.func @nested_ops_preserved(%ptr: !tiny.ptr, %n: index, %step: index) {
   // Verify that operations inside the loop body are preserved.
@@ -30,6 +32,8 @@ func.func @nested_ops_preserved(%ptr: !tiny.ptr, %n: index, %step: index) {
   }
   return
 }
+
+// -----
 
 // CHECK-LABEL: func.func @multiple_accumulators_lowering
 func.func @multiple_accumulators_lowering(%n: index, %step: index,

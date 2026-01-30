@@ -1,4 +1,4 @@
-// RUN: tutorial-opt %s | FileCheck %s
+// RUN: tutorial-opt --split-input-file %s | FileCheck %s
 // Test basic parsing and printing of Tiny dialect operations.
 
 // CHECK-LABEL: func.func @test_vector_constant
@@ -8,12 +8,16 @@ func.func @test_vector_constant() -> vector<4xf16> {
   return %0 : vector<4xf16>
 }
 
+// -----
+
 // CHECK-LABEL: func.func @test_index_constant
 func.func @test_index_constant() -> index {
   // CHECK: tiny.constant 42 : index
   %0 = tiny.constant 42 : index
   return %0 : index
 }
+
+// -----
 
 // CHECK-LABEL: func.func @test_vector_ops
 func.func @test_vector_ops(%a: vector<4xf16>, %b: vector<4xf16>) -> vector<4xf16> {
@@ -28,6 +32,8 @@ func.func @test_vector_ops(%a: vector<4xf16>, %b: vector<4xf16>) -> vector<4xf16
   return %3 : vector<4xf16>
 }
 
+// -----
+
 // CHECK-LABEL: func.func @test_index_ops
 func.func @test_index_ops(%a: index, %b: index) -> index {
   // CHECK: tiny.addi
@@ -41,12 +47,16 @@ func.func @test_index_ops(%a: index, %b: index) -> index {
   return %3 : index
 }
 
+// -----
+
 // CHECK-LABEL: func.func @test_sum
 func.func @test_sum(%a: vector<4xf16>) -> vector<1xf16> {
   // CHECK: tiny.sum %{{.*}} : vector<4xf16> -> vector<1xf16>
   %0 = tiny.sum %a : vector<4xf16> -> vector<1xf16>
   return %0 : vector<1xf16>
 }
+
+// -----
 
 // CHECK-LABEL: func.func @test_memory_ops
 func.func @test_memory_ops(%ptr: !tiny.ptr, %offset: index, %vec: vector<4xf16>) {

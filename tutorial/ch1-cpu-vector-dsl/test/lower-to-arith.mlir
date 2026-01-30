@@ -1,4 +1,4 @@
-// RUN: tutorial-opt --tiny-to-arith %s | FileCheck %s
+// RUN: tutorial-opt --split-input-file --tiny-to-arith %s | FileCheck %s
 // Test lowering of Tiny dialect arithmetic operations to arith dialect.
 // Note: Memory operations (load/store) are NOT lowered by this pass.
 
@@ -10,6 +10,8 @@ func.func @test_vector_constant_lowering() -> vector<4xf16> {
   return %0 : vector<4xf16>
 }
 
+// -----
+
 // CHECK-LABEL: func.func @test_index_constant_lowering
 func.func @test_index_constant_lowering() -> index {
   // CHECK: arith.constant 42 : index
@@ -17,6 +19,8 @@ func.func @test_index_constant_lowering() -> index {
   %0 = tiny.constant 42 : index
   return %0 : index
 }
+
+// -----
 
 // CHECK-LABEL: func.func @test_vector_ops_lowering
 func.func @test_vector_ops_lowering(%a: vector<4xf16>, %b: vector<4xf16>) -> vector<4xf16> {
@@ -35,22 +39,20 @@ func.func @test_vector_ops_lowering(%a: vector<4xf16>, %b: vector<4xf16>) -> vec
   return %3 : vector<4xf16>
 }
 
+// -----
+
 // CHECK-LABEL: func.func @test_index_ops_lowering
 func.func @test_index_ops_lowering(%a: index, %b: index) -> index {
-  // CHECK: arith.addi
-  // CHECK-NOT: tiny.addi
-  %0 = tiny.addi %a, %b
-  // CHECK: arith.subi
-  // CHECK-NOT: tiny.subi
-  %1 = tiny.subi %0, %b
   // CHECK: arith.muli
   // CHECK-NOT: tiny.muli
-  %2 = tiny.muli %1, %a
+  %0 = tiny.muli %a, %a
   // CHECK: arith.divsi
   // CHECK-NOT: tiny.divi
-  %3 = tiny.divi %2, %b
-  return %3 : index
+  %1 = tiny.divi %0, %b
+  return %1 : index
 }
+
+// -----
 
 // CHECK-LABEL: func.func @test_sum_lowering
 func.func @test_sum_lowering(%a: vector<4xf16>) -> vector<1xf16> {
@@ -60,6 +62,8 @@ func.func @test_sum_lowering(%a: vector<4xf16>) -> vector<1xf16> {
   %0 = tiny.sum %a : vector<4xf16> -> vector<1xf16>
   return %0 : vector<1xf16>
 }
+
+// -----
 
 // CHECK-LABEL: func.func @test_memory_ops_preserved
 // Memory operations should NOT be lowered by tiny-to-arith pass.

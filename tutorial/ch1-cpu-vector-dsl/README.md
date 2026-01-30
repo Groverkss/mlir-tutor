@@ -131,8 +131,8 @@ remaining operations. You should look at how other operations are defined, and
 simply reuse the same pattern (FYI: The author has been working on MLIR for
 over 5 years now and still copies tablegen definitions from elsewhere).
 
-Once you are done, try testing with `test/basic-ops.mlir` file, which should
-verify if the operations definitions work as expected.
+Once you are done, run `make check-tutorial-ch1` from the build directory.
+The `test/basic-ops.mlir` test should pass if your implementation is correct.
 
 ### Exercise 2: TinyToArith Lowering Pass
 
@@ -153,8 +153,8 @@ Your task is to implement the lowering patterns for the remaining operations:
 - tiny.muli -> arith.muli
 - tiny.divi -> arith.divi
 
-Once done, you can try testing with `test/lower-to-arith.mlir`  file, which
-should verify if the lowering works as expected.
+Once done, run `make check-tutorial-ch1` from the build directory.
+The `test/lower-to-arith.mlir` test should pass if your implementation is correct.
 
 ### Exercise 3: TinyToLLVM Lowering Pass
 
@@ -167,15 +167,12 @@ Your task is to implement the lowering pattern for the remaining operation:
 
 - tiny.store -> llvm.getelementptr + llvm.store
 
-Once done, you can try testing with `test/lower-to-llvm.mlir` file, which
-should verify if the lowering works as expected.
-
 Note that this file uses more complex infrastructure for conversion, which
 also converts types. We will learn about this more later, but for now,
 you can add a TypeConverter in rewrite pattern that allows type conversions.
 
-Once done, you can try testing with `test/lower-to-llvm.mlir` file, which
-should verify if the lowering works as expected.
+Once done, run `make check-tutorial-ch1` from the build directory.
+The `test/lower-to-llvm.mlir` test should pass if your implementation is correct.
 
 ### Challenge Exercise (Optional)
 

@@ -1,4 +1,4 @@
-// RUN: tutorial-opt %s | FileCheck %s
+// RUN: tutorial-opt --split-input-file %s | FileCheck %s
 // Test basic parsing and printing of tiny_loop.accumulate.
 
 // CHECK-LABEL: func.func @side_effect_loop
@@ -7,13 +7,15 @@ func.func @side_effect_loop(%ptr: !tiny.ptr, %n: index, %step: index) {
   // CHECK-NEXT: ^bb0(%{{.*}}: index):
   tiny_loop.accumulate %n step(%step) {
   ^bb0(%i: index):
+    // CHECK: tiny.load
     %vec = tiny.load %ptr, %i : vector<4xf16>
+    // CHECK: tiny.store
     tiny.store %vec, %ptr, %i : vector<4xf16>
-    // CHECK: tiny_loop.yield
-    tiny_loop.yield
   }
   return
 }
+
+// -----
 
 // CHECK-LABEL: func.func @loop_with_constant_step
 func.func @loop_with_constant_step(%ptr: !tiny.ptr, %n: index) {
@@ -23,7 +25,6 @@ func.func @loop_with_constant_step(%ptr: !tiny.ptr, %n: index) {
   ^bb0(%i: index):
     %vec = tiny.load %ptr, %i : vector<4xf16>
     tiny.store %vec, %ptr, %i : vector<4xf16>
-    tiny_loop.yield
   }
   return
 }

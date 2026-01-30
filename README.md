@@ -24,7 +24,7 @@ python3 -m mlir_wheel --root-dir
 ```bash
 mkdir build
 cd build
-cmake ../ -DCMAKE_PREFIX_PATH=$(python -m mlir_wheel --root-dir)
+cmake ../ -DCMAKE_PREFIX_PATH=$(python -m mlir_wheel --root-dir) -DLLVM_EXTERNAL_LIT=$(which lit)
 ```
 
 5. Build:

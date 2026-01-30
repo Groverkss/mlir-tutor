@@ -1,4 +1,4 @@
-// RUN: tutorial-opt --tiny-loop-to-scf --tiny-to-arith --tiny-to-llvm %s | FileCheck %s
+// RUN: tutorial-opt --split-input-file --tiny-loop-to-scf --tiny-to-arith --tiny-to-llvm %s | FileCheck %s
 // Test full lowering pipeline: tiny_loop ops + tiny ops to LLVM.
 
 // CHECK-LABEL: func.func @vector_sum_pipeline
@@ -23,6 +23,8 @@ func.func @vector_sum_pipeline(%ptr: !tiny.ptr, %n: index) -> vector<4xf16> {
 
   return %result : vector<4xf16>
 }
+
+// -----
 
 // CHECK-LABEL: func.func @index_sum_pipeline
 func.func @index_sum_pipeline(%n: index) -> index {

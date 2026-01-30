@@ -174,8 +174,8 @@ Your task is to:
    - StoreOp -> gpu.thread_id + tiny.store (compute per-thread offset from layout)
    - SumOp -> tiny.sum + vector.extract + gpu.subgroup_reduce + vector.broadcast
 
-Once done, try testing with `test/lower-to-tiny.mlir` file, which should verify
-if the lowering works as expected.
+Once done, run `make check-tutorial-ch3` from the build directory.
+The `test/lower-to-tiny.mlir` test should pass if your implementation is correct.
 
 ### Challenge Exercise (Optional)
 

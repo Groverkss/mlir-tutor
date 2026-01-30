@@ -26,7 +26,7 @@ if(NOT MLIR_FOUND)
   message(FATAL_ERROR
     "MLIR not found. Please specify CMAKE_PREFIX_PATH to the MLIR installation.\n"
     "If using mlir_wheel, run:\n"
-    "  cmake -DCMAKE_PREFIX_PATH=$(python -m mlir_wheel --root-dir) .."
+    "  cmake -DCMAKE_PREFIX_PATH=$(python -m mlir_wheel --root-dir) -DLLVM_EXTERNAL_LIT=$(which lit) .."
   )
 endif()
 
@@ -49,3 +49,4 @@ include_directories(${MLIR_INCLUDE_DIRS})
 ################################################################################
 
 add_subdirectory(tutorial)
+add_subdirectory(test)

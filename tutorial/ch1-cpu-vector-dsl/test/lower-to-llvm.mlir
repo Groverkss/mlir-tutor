@@ -1,4 +1,4 @@
-// RUN: tutorial-opt --tiny-to-llvm %s | FileCheck %s
+// RUN: tutorial-opt --split-input-file --tiny-to-llvm %s | FileCheck %s
 // Test lowering of Tiny dialect memory operations to LLVM dialect.
 
 // CHECK-LABEL: func.func @test_load_lowering
@@ -12,6 +12,8 @@ func.func @test_load_lowering(%ptr: !tiny.ptr, %offset: index) -> vector<4xf16> 
   return %0 : vector<4xf16>
 }
 
+// -----
+
 // CHECK-LABEL: func.func @test_store_lowering
 // CHECK-SAME: (%[[VEC:.*]]: vector<4xf16>, %[[PTR:.*]]: !llvm.ptr, %[[OFFSET:.*]]: index)
 func.func @test_store_lowering(%vec: vector<4xf16>, %ptr: !tiny.ptr, %offset: index) {
@@ -22,6 +24,8 @@ func.func @test_store_lowering(%vec: vector<4xf16>, %ptr: !tiny.ptr, %offset: in
   tiny.store %vec, %ptr, %offset : vector<4xf16>
   return
 }
+
+// -----
 
 // CHECK-LABEL: func.func @test_load_store_pipeline
 // CHECK-SAME: (%[[PTR:.*]]: !llvm.ptr, %[[OFFSET:.*]]: index)
@@ -40,6 +44,8 @@ func.func @test_load_store_pipeline(%ptr: !tiny.ptr, %offset: index) -> vector<4
 
   return %vec : vector<4xf16>
 }
+
+// -----
 
 // CHECK-LABEL: func.func @test_type_conversion
 // Verify that the !tiny.ptr type is converted to !llvm.ptr in function signatures.

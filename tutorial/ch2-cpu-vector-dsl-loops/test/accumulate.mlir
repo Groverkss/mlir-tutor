@@ -1,4 +1,4 @@
-// RUN: tutorial-opt %s | FileCheck %s
+// RUN: tutorial-opt --split-input-file %s | FileCheck %s
 // Test tiny_loop.accumulate with init args (loop-carried values).
 
 // CHECK-LABEL: func.func @sum_loop
@@ -14,6 +14,8 @@ func.func @sum_loop(%n: index, %step: index, %init: index) -> index {
   return %result : index
 }
 
+// -----
+
 // CHECK-LABEL: func.func @vector_accumulation
 func.func @vector_accumulation(%ptr: !tiny.ptr, %n: index,
                                %init: vector<4xf16>) -> vector<4xf16> {
@@ -28,6 +30,8 @@ func.func @vector_accumulation(%ptr: !tiny.ptr, %n: index,
   }
   return %result : vector<4xf16>
 }
+
+// -----
 
 // CHECK-LABEL: func.func @multiple_accumulators
 func.func @multiple_accumulators(%n: index, %step: index,

@@ -1,4 +1,4 @@
-// RUN: tutorial-opt %s | FileCheck %s
+// RUN: tutorial-opt --split-input-file %s | FileCheck %s
 // Test parsing and printing of tiny_tile operations.
 // All tile types must have a layout.
 
@@ -15,6 +15,10 @@ func.func @test_elementwise(
       -> !tiny_tile.tile<32x16, #L>
   return %c : !tiny_tile.tile<32x16, #L>
 }
+
+// -----
+
+#L = #tiny_tile.layout<thread = [16, 4], vector_size = 8>
 
 // CHECK-LABEL: func.func @test_all_elementwise_kinds
 func.func @test_all_elementwise_kinds(
@@ -39,6 +43,10 @@ func.func @test_all_elementwise_kinds(
   return %div : !tiny_tile.tile<32x16, #L>
 }
 
+// -----
+
+#L = #tiny_tile.layout<thread = [16, 4], vector_size = 8>
+
 // CHECK-LABEL: func.func @test_load_store
 func.func @test_load_store(%ptr: !tiny.ptr, %row: index, %col: index, %stride: index) {
   // CHECK: tiny_tile.load
@@ -50,6 +58,10 @@ func.func @test_load_store(%ptr: !tiny.ptr, %row: index, %col: index, %stride: i
   return
 }
 
+// -----
+
+#L = #tiny_tile.layout<thread = [16, 4], vector_size = 8>
+
 // CHECK-LABEL: func.func @test_sum
 func.func @test_sum(%tile: !tiny_tile.tile<32x16, #L>) -> vector<1xf16> {
   // CHECK: tiny_tile.sum
@@ -57,12 +69,20 @@ func.func @test_sum(%tile: !tiny_tile.tile<32x16, #L>) -> vector<1xf16> {
   return %sum : vector<1xf16>
 }
 
+// -----
+
+#L = #tiny_tile.layout<thread = [16, 4], vector_size = 8>
+
 // CHECK-LABEL: func.func @test_splat
 func.func @test_splat() -> !tiny_tile.tile<32x16, #L> {
   // CHECK: tiny_tile.splat 1.000000e+00
   %tile = tiny_tile.splat 1.0 : !tiny_tile.tile<32x16, #L>
   return %tile : !tiny_tile.tile<32x16, #L>
 }
+
+// -----
+
+#L = #tiny_tile.layout<thread = [16, 4], vector_size = 8>
 
 // CHECK-LABEL: func.func @test_splat_zero
 func.func @test_splat_zero() -> !tiny_tile.tile<32x16, #L> {
