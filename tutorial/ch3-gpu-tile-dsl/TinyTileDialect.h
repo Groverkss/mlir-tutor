@@ -30,9 +30,6 @@
 #define GET_TYPEDEF_CLASSES
 #include "ch3-gpu-tile-dsl/TinyTileTypes.h.inc"
 
-// Include the auto-generated interface declarations.
-#include "ch3-gpu-tile-dsl/TinyTileInterfaces.h.inc"
-
 // Include the auto-generated operation declarations.
 #define GET_OP_CLASSES
 #include "ch3-gpu-tile-dsl/TinyTileOps.h.inc"
