@@ -102,11 +102,11 @@ like.
 
 Try writing an elementwise add in the language to get more familiar with it.
 
-## Excercise Implementations
+## Exercise Implementations
 
-Switch to `ch1-excercise` branch to access the excercises for ch1.
+Switch to `ch1-excercise` branch to access the exercises for ch1.
 
-### Excercise 1: Op Implementations
+### Exercise 1: Op Implementations
 
 Open the TinyDialect.td file. You will notice there are some dialect / type /
 operation definitions that already exist. The following things are already
@@ -126,15 +126,15 @@ implemented:
 
 - tiny.load
 
-The task for this excercise is to implement the operation definition of the
+The task for this exercise is to implement the operation definition of the
 remaining operations. You should look at how other operations are defined, and
 simply reuse the same pattern (FYI: The author has been working on MLIR for
 over 5 years now and still copies tablegen definitions from elsewhere).
 
 Once you are done, try testing with `test/basic-ops.mlir` file, which should
-verify if the operations definitions work as excpected.
+verify if the operations definitions work as expected.
 
-### Excercise 2: TinyToArith Lowering Pass
+### Exercise 2: TinyToArith Lowering Pass
 
 Open the TinyToArith.cpp file. You will notice there is already a pass skeleton
 defined for you, with the following patterns already defined (for motivation):
@@ -156,7 +156,7 @@ Your task is to implement the lowering patterns for the remaining operations:
 Once done, you can try testing with `test/lower-to-arith.mlir`  file, which
 should verify if the lowering works as expected.
 
-### Excercise 3: TinyToLLVM Lowering Pass
+### Exercise 3: TinyToLLVM Lowering Pass
 
 Open the TinyToLLVM.cpp file, you will notice there is already a pass skeleton
 defined for you, with the following pattern already defined (for motivation):
@@ -177,7 +177,7 @@ you can add a TypeConverter in rewrite pattern that allows type conversions.
 Once done, you can try testing with `test/lower-to-llvm.mlir` file, which
 should verify if the lowering works as expected.
 
-### Challenge Excercise (Optional)
+### Challenge Exercise (Optional)
 
 Write a matmul computation of M=64,N=64,K=64 in the python dsl, using only
 vectors of width 8.
