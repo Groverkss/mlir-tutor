@@ -118,6 +118,38 @@ def store_tile(tile: Tile, ptr: Ptr, row: Index, col: Index, stride: Index):
     )
 
 
+# --- GPU block/thread ID functions ---
+
+def block_id_x() -> Index:
+    """Get the block ID in the x dimension (gpu.block_id x)."""
+    op = Operation.create(
+        "gpu.block_id",
+        results=[IndexType.get()],
+        attributes={"dimension": Attribute.parse("#gpu<dim x>")},
+    )
+    return Index._wrap(op.result)
+
+
+def block_id_y() -> Index:
+    """Get the block ID in the y dimension (gpu.block_id y)."""
+    op = Operation.create(
+        "gpu.block_id",
+        results=[IndexType.get()],
+        attributes={"dimension": Attribute.parse("#gpu<dim y>")},
+    )
+    return Index._wrap(op.result)
+
+
+def block_id_z() -> Index:
+    """Get the block ID in the z dimension (gpu.block_id z)."""
+    op = Operation.create(
+        "gpu.block_id",
+        results=[IndexType.get()],
+        attributes={"dimension": Attribute.parse("#gpu<dim z>")},
+    )
+    return Index._wrap(op.result)
+
+
 # --- Convenience functions ---
 
 def _get_type_map():

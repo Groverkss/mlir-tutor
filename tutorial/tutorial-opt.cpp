@@ -22,10 +22,6 @@
 #include "ch3-gpu-tile-dsl/TinyTileDialect.h"
 #include "ch3-gpu-tile-dsl/TinyTilePasses.h"
 
-// Chapter 4: TinyTensor dialect
-#include "ch4-tensor-dsl/TinyTensorDialect.h"
-#include "ch4-tensor-dsl/TinyTensorPasses.h"
-
 int main(int argc, char **argv) {
   mlir::DialectRegistry registry;
 
@@ -42,13 +38,11 @@ int main(int argc, char **argv) {
   registry.insert<mlir::tiny::TinyDialect>();
   registry.insert<mlir::tiny_loop::TinyLoopDialect>();
   registry.insert<mlir::tiny_tile::TinyTileDialect>();
-  registry.insert<mlir::tiny_tensor::TinyTensorDialect>();
 
   // Register tutorial passes.
   mlir::tiny::registerPasses();
   mlir::tiny_loop::registerPasses();
   mlir::tiny_tile::registerPasses();
-  mlir::tiny_tensor::registerPasses();
 
   return mlir::asMainReturnCode(
       mlir::MlirOptMain(argc, argv, "Tutorial optimizer driver\n", registry));
