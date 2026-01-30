@@ -36,17 +36,12 @@ Types:
 
 With this language we can represent some simple programs:
 
-Note that we are using a pesudeo-syntax here for clairty on what this language
-can represent:
-
 ```mlir
-def fun(a: ptr, b : ptr, c : ptr):
-    zero_offset = tiny.constant(0) : index
-    a_v = tiny.load(a, zero_offset) : vector<8xf16>
-    b_v = tiny.load(b, zero_offset) : vector<8xf16>
-    c_v = tiny.addf(a_v, b_v) : vector<8xf16>
-    tiny.store(c_v, a, zero_offset) : ()
-    return
+def square(a: Ptr, result: Ptr, offset: Index):
+    """Square a vector of 16 f16 elements."""
+    x = a.load(offset, num_elements=16)
+    x_squared = x * x
+    result.store(offset, x_squared)
 ```
 
 ## Lowering
@@ -93,7 +88,24 @@ With these passes, we can fully lower our tiny language to MLIR, by reusing
 arith -> llvm conversions. This is one of MLIR's strengths: reusing existing
 infrastructure whenever possible.
 
+## Playing around with the language
+
+Switch to the `main` branch. Make sure you have the python package installed
+as mentioned in ../../README.md
+
+Open `square.py` and have a look at the python dsl code. Run the file with
+`python3 square.py` to see the language lowering to LLVM.
+
+You can use this as a playground to play around with the language and see what
+code is produced during the lowerings. This should get you a better
+understanding of what the operations look like and what the lowerings look
+like.
+
+Try writing an elementwise add in the language to get more familiar with it.
+
 ## Excercise Implementations
+
+Switch to `ch1-excercise` branch to access the excercises for ch1.
 
 ### Excercise 1: Op Implementations
 
@@ -165,3 +177,9 @@ you can add a TypeConverter in rewrite pattern that allows type conversions.
 
 Once done, you can try testing with `test/lower-to-llvm.mlir` file, which
 should verify if the lowering works as expected.
+
+### Challenge Excercise (Optional)
+
+Write a matmul computation of M=64,N=64,K=64 in the python dsl, using only
+vectors of width 8.
+Hint: Use python loops directly
