@@ -49,38 +49,17 @@ struct AddFOpLowering : public OpRewritePattern<AddFOp> {
   }
 };
 
-/// Lower tiny.subf to arith.subf.
-struct SubFOpLowering : public OpRewritePattern<SubFOp> {
-  using OpRewritePattern<SubFOp>::OpRewritePattern;
+// TODO: Implement SubFOpLowering
+// Lower tiny.subf to arith.subf
+// Hint: Follow the same pattern as AddFOpLowering
 
-  LogicalResult matchAndRewrite(SubFOp op,
-                                PatternRewriter &rewriter) const override {
-    rewriter.replaceOpWithNewOp<arith::SubFOp>(op, op.getLhs(), op.getRhs());
-    return success();
-  }
-};
+// TODO: Implement MulFOpLowering
+// Lower tiny.mulf to arith.mulf
+// Hint: Follow the same pattern as AddFOpLowering
 
-/// Lower tiny.mulf to arith.mulf.
-struct MulFOpLowering : public OpRewritePattern<MulFOp> {
-  using OpRewritePattern<MulFOp>::OpRewritePattern;
-
-  LogicalResult matchAndRewrite(MulFOp op,
-                                PatternRewriter &rewriter) const override {
-    rewriter.replaceOpWithNewOp<arith::MulFOp>(op, op.getLhs(), op.getRhs());
-    return success();
-  }
-};
-
-/// Lower tiny.divf to arith.divf.
-struct DivFOpLowering : public OpRewritePattern<DivFOp> {
-  using OpRewritePattern<DivFOp>::OpRewritePattern;
-
-  LogicalResult matchAndRewrite(DivFOp op,
-                                PatternRewriter &rewriter) const override {
-    rewriter.replaceOpWithNewOp<arith::DivFOp>(op, op.getLhs(), op.getRhs());
-    return success();
-  }
-};
+// TODO: Implement DivFOpLowering
+// Lower tiny.divf to arith.divf
+// Hint: Follow the same pattern as AddFOpLowering
 
 /// Lower tiny.addi to arith.addi.
 struct AddIOpLowering : public OpRewritePattern<AddIOp> {
@@ -93,38 +72,17 @@ struct AddIOpLowering : public OpRewritePattern<AddIOp> {
   }
 };
 
-/// Lower tiny.subi to arith.subi.
-struct SubIOpLowering : public OpRewritePattern<SubIOp> {
-  using OpRewritePattern<SubIOp>::OpRewritePattern;
+// TODO: Implement SubIOpLowering
+// Lower tiny.subi to arith.subi
+// Hint: Follow the same pattern as AddIOpLowering
 
-  LogicalResult matchAndRewrite(SubIOp op,
-                                PatternRewriter &rewriter) const override {
-    rewriter.replaceOpWithNewOp<arith::SubIOp>(op, op.getLhs(), op.getRhs());
-    return success();
-  }
-};
+// TODO: Implement MulIOpLowering
+// Lower tiny.muli to arith.muli
+// Hint: Follow the same pattern as AddIOpLowering
 
-/// Lower tiny.muli to arith.muli.
-struct MulIOpLowering : public OpRewritePattern<MulIOp> {
-  using OpRewritePattern<MulIOp>::OpRewritePattern;
-
-  LogicalResult matchAndRewrite(MulIOp op,
-                                PatternRewriter &rewriter) const override {
-    rewriter.replaceOpWithNewOp<arith::MulIOp>(op, op.getLhs(), op.getRhs());
-    return success();
-  }
-};
-
-/// Lower tiny.divi to arith.divsi (signed integer division).
-struct DivIOpLowering : public OpRewritePattern<DivIOp> {
-  using OpRewritePattern<DivIOp>::OpRewritePattern;
-
-  LogicalResult matchAndRewrite(DivIOp op,
-                                PatternRewriter &rewriter) const override {
-    rewriter.replaceOpWithNewOp<arith::DivSIOp>(op, op.getLhs(), op.getRhs());
-    return success();
-  }
-};
+// TODO: Implement DivIOpLowering
+// Lower tiny.divi to arith.divsi (signed integer division)
+// Hint: Follow the same pattern as AddIOpLowering
 
 /// Lower tiny.sum to vector.reduction<add> + vector.broadcast.
 struct SumOpLowering : public OpRewritePattern<SumOp> {
@@ -156,9 +114,8 @@ public:
   void runOnOperation() override {
     // Set up rewrite patterns.
     RewritePatternSet patterns(&getContext());
-    patterns.add<ConstantOpLowering, AddFOpLowering, SubFOpLowering,
-                 MulFOpLowering, DivFOpLowering, AddIOpLowering, SubIOpLowering,
-                 MulIOpLowering, DivIOpLowering, SumOpLowering>(&getContext());
+    patterns.add<ConstantOpLowering, AddFOpLowering, SumOpLowering, AddIOpLowering>(&getContext());
+    // TODO: Add SubFOpLowering, MulFOpLowering, DivFOpLowering, SubIOpLowering, MulIOpLowering, DivIOpLowering
 
     // Apply patterns greedily to lower all matching operations.
     if (failed(applyPatternsGreedily(getOperation(), std::move(patterns))))

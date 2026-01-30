@@ -151,41 +151,17 @@ def Tiny_AddFOp : Tiny_VectorBinaryOp<"addf", [Commutative]> {
   }];
 }
 
-def Tiny_SubFOp : Tiny_VectorBinaryOp<"subf"> {
-  let summary = "Element-wise vector subtraction.";
-  let description = [{
-    Performs element-wise subtraction of two f16 vectors.
+// TODO: Implement Tiny_SubFOp
+// Define element-wise vector subtraction operation
+// Hint: Follow the same pattern as Tiny_AddFOp
 
-    Example:
-    ```mlir
-    %0 = tiny.subf %a, %b : vector<4xf16>
-    ```
-  }];
-}
+// TODO: Implement Tiny_MulFOp
+// Define element-wise vector multiplication operation
+// Hint: Follow the same pattern as Tiny_AddFOp (and add [Commutative] trait)
 
-def Tiny_MulFOp : Tiny_VectorBinaryOp<"mulf", [Commutative]> {
-  let summary = "Element-wise vector multiplication.";
-  let description = [{
-    Performs element-wise multiplication of two f16 vectors.
-
-    Example:
-    ```mlir
-    %0 = tiny.mulf %a, %b : vector<4xf16>
-    ```
-  }];
-}
-
-def Tiny_DivFOp : Tiny_VectorBinaryOp<"divf"> {
-  let summary = "Element-wise vector division.";
-  let description = [{
-    Performs element-wise division of two f16 vectors.
-
-    Example:
-    ```mlir
-    %0 = tiny.divf %a, %b : vector<4xf16>
-    ```
-  }];
-}
+// TODO: Implement Tiny_DivFOp
+// Define element-wise vector division operation
+// Hint: Follow the same pattern as Tiny_AddFOp
 
 //===----------------------------------------------------------------------===//
 // Vector reduction operations
@@ -249,41 +225,17 @@ def Tiny_AddIOp : Tiny_IndexBinaryOp<"addi", [Commutative]> {
   }];
 }
 
-def Tiny_SubIOp : Tiny_IndexBinaryOp<"subi"> {
-  let summary = "Index subtraction.";
-  let description = [{
-    Performs subtraction of two index values.
+// TODO: Implement Tiny_SubIOp
+// Define index subtraction operation
+// Hint: Follow the same pattern as Tiny_AddIOp
 
-    Example:
-    ```mlir
-    %0 = tiny.subi %a, %b
-    ```
-  }];
-}
+// TODO: Implement Tiny_MulIOp
+// Define index multiplication operation
+// Hint: Follow the same pattern as Tiny_AddIOp (and add [Commutative] trait)
 
-def Tiny_MulIOp : Tiny_IndexBinaryOp<"muli", [Commutative]> {
-  let summary = "Index multiplication.";
-  let description = [{
-    Performs multiplication of two index values.
-
-    Example:
-    ```mlir
-    %0 = tiny.muli %a, %b
-    ```
-  }];
-}
-
-def Tiny_DivIOp : Tiny_IndexBinaryOp<"divi"> {
-  let summary = "Index division.";
-  let description = [{
-    Performs signed division of two index values.
-
-    Example:
-    ```mlir
-    %0 = tiny.divi %a, %b
-    ```
-  }];
-}
+// TODO: Implement Tiny_DivIOp
+// Define index division operation
+// Hint: Follow the same pattern as Tiny_AddIOp
 
 //===----------------------------------------------------------------------===//
 // Memory operations
@@ -307,23 +259,12 @@ def Tiny_LoadOp : Tiny_Op<"load", [Pure]> {
   let assemblyFormat = "$ptr `,` $offset attr-dict `:` type($result)";
 }
 
-def Tiny_StoreOp : Tiny_Op<"store"> {
-  let summary = "Store a vector to memory.";
-  let description = [{
-    Stores a vector<Nxf16> to memory at the given pointer and element offset.
-    The offset is in f16 elements (not bytes).
-
-    Example:
-    ```mlir
-    tiny.store %vec, %ptr, %offset : vector<4xf16>
-    ```
-  }];
-
-  let arguments = (ins Tiny_VectorF16:$value, Tiny_PtrType:$ptr, Index:$offset);
-  let results = (outs);
-
-  let assemblyFormat = "$value `,` $ptr `,` $offset attr-dict `:` type($value)";
-}
+// TODO: Implement Tiny_StoreOp
+// Define an operation to store a vector to memory
+// Hint: Follow the same pattern as Tiny_LoadOp, but:
+//   - Takes a value to store, a pointer, and an offset
+//   - Has no results (returns nothing)
+//   - Use Tiny_VectorF16:$value, Tiny_PtrType:$ptr, Index:$offset as arguments
 
 
 #endif // TINY_DIALECT

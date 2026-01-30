@@ -87,44 +87,14 @@ struct LoadOpToLLVMLowering : public OpConversionPattern<LoadOp> {
   }
 };
 
-/// Lower tiny.store to llvm.getelementptr + llvm.store.
-///
-/// tiny.store %vec, %ptr, %offset : vector<Nxf16>
-/// ->
-/// %gep = llvm.getelementptr %ptr[%offset] : (!llvm.ptr, i64) -> !llvm.ptr, f16
-/// llvm.store %vec, %gep : vector<Nxf16>, !llvm.ptr
-///
-/// The offset in tiny.store is in f16 elements. The GEP with f16 element type
-/// automatically computes the correct byte offset (offset * sizeof(f16)).
-struct StoreOpToLLVMLowering : public OpConversionPattern<StoreOp> {
-  using OpConversionPattern<StoreOp>::OpConversionPattern;
-
-  LogicalResult
-  matchAndRewrite(StoreOp op, OpAdaptor adaptor,
-                  ConversionPatternRewriter &rewriter) const override {
-    Location loc = op.getLoc();
-
-    // The adaptor provides the converted operands (ptr is now !llvm.ptr).
-    Value value = adaptor.getValue();
-    Value ptr = adaptor.getPtr();
-    Value offset = adaptor.getOffset();
-
-    // Convert index offset to i64 for GEP.
-    Type i64Type = rewriter.getI64Type();
-    Value offsetI64 =
-        arith::IndexCastOp::create(rewriter, loc, i64Type, offset);
-
-    // Create GEP with f16 element type to compute the address.
-    Type f16Type = rewriter.getF16Type();
-    Type llvmPtrType = LLVM::LLVMPointerType::get(getContext());
-    Value gep = LLVM::GEPOp::create(rewriter, loc, llvmPtrType, f16Type, ptr,
-                                    ValueRange{offsetI64});
-
-    // Store the vector to the computed address.
-    rewriter.replaceOpWithNewOp<LLVM::StoreOp>(op, value, gep);
-    return success();
-  }
-};
+// TODO: Implement StoreOpToLLVMLowering
+// Lower tiny.store to llvm.getelementptr + llvm.store
+// Hint: Follow the same pattern as LoadOpToLLVMLowering
+//
+// tiny.store %vec, %ptr, %offset : vector<Nxf16>
+// ->
+// %gep = llvm.getelementptr %ptr[%offset] : (!llvm.ptr, i64) -> !llvm.ptr, f16
+// llvm.store %vec, %gep : vector<Nxf16>, !llvm.ptr
 
 //===----------------------------------------------------------------------===//
 // TinyToLLVM pass implementation
@@ -140,7 +110,8 @@ public:
     ConversionTarget target(getContext());
 
     // Mark memory operations as illegal.
-    target.addIllegalOp<LoadOp, StoreOp>();
+    target.addIllegalOp<LoadOp>();
+    // TODO: Also mark StoreOp as illegal when StoreOpToLLVMLowering is implemented
 
     // Mark LLVM and arith dialects as legal.
     target.addLegalDialect<LLVM::LLVMDialect>();
@@ -160,8 +131,8 @@ public:
     RewritePatternSet patterns(&getContext());
 
     // Add conversion patterns that use the type converter.
-    patterns.add<LoadOpToLLVMLowering, StoreOpToLLVMLowering>(typeConverter,
-                                                              &getContext());
+    patterns.add<LoadOpToLLVMLowering>(typeConverter, &getContext());
+    // TODO: Add StoreOpToLLVMLowering
 
     // Add function signature conversion patterns.
     populateFunctionOpInterfaceTypeConversionPattern<func::FuncOp>(
