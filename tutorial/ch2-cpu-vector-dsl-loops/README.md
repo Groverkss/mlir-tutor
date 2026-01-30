@@ -78,7 +78,7 @@ with it.
 
 ## Exercise Implementations
 
-Switch to `ch2-excercise` branch to access the exercises for ch2.
+Switch to `ch2-exercise` branch to access the exercises for ch2.
 
 ### Exercise 1: TinyLoopToSCF Lowering Pass
 

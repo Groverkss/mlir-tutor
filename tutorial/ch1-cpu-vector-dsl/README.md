@@ -104,7 +104,7 @@ Try writing an elementwise add in the language to get more familiar with it.
 
 ## Exercise Implementations
 
-Switch to `ch1-excercise` branch to access the exercises for ch1.
+Switch to `ch1-exercise` branch to access the exercises for ch1.
 
 ### Exercise 1: Op Implementations
 
