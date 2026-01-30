@@ -36,9 +36,8 @@ Types:
 
 With this language we can represent some simple programs:
 
-```mlir
+```python
 def square(a: Ptr, result: Ptr, offset: Index):
-    """Square a vector of 16 f16 elements."""
     x = a.load(offset, num_elements=16)
     x_squared = x * x
     result.store(offset, x_squared)
