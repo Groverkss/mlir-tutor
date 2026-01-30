@@ -25,15 +25,8 @@ def LinalgToTinyTile : Pass<"linalg-to-tiny-tile"> {
     5. Store results using tiny_tile.store
     6. Convert pointers back to tensors using tiny_tensor.from_ptr
 
-    The conversion process for reductions:
-    1. Convert input tensor to pointer using tiny_tensor.to_ptr
-    2. Load tile using tiny_tile.load
-    3. Reduce tile using tiny_tile.reduce
-    4. Wrap scalar result in tensor using tensor.from_elements
-
     Restrictions:
     - Only 2D tensors are supported for elementwise ops
-    - Only full reductions (all iterators are reduction) are supported
     - Static tensor shapes required
 
     Example (elementwise):

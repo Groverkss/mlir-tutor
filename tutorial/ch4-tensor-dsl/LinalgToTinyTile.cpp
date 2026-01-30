@@ -53,15 +53,6 @@ static bool isAllParallel(linalg::GenericOp op) {
   return true;
 }
 
-/// Check if all iterator types are reduction.
-static bool isAllReduction(linalg::GenericOp op) {
-  for (auto iterType : op.getIteratorTypesArray()) {
-    if (iterType != utils::IteratorType::reduction)
-      return false;
-  }
-  return true;
-}
-
 /// Check if a linalg.generic op is a simple elementwise operation.
 ///
 /// Requirements:
@@ -94,41 +85,6 @@ static bool isElementwiseGeneric(linalg::GenericOp op) {
     if (!tensorType.hasStaticShape())
       return false;
   }
-
-  return true;
-}
-
-/// Check if a linalg.generic op is a full reduction.
-///
-/// Requirements:
-/// - All iterator types are reduction
-/// - Input is a 2D tensor of f16
-/// - Output is a 0D tensor (scalar) of f16
-/// - Static shapes
-static bool isFullReduction(linalg::GenericOp op) {
-  // Check all iterator types are reduction.
-  if (!isAllReduction(op))
-    return false;
-
-  // Check that we have exactly one input.
-  if (op.getInputs().size() != 1)
-    return false;
-
-  // Check input is 2D tensor of f16.
-  auto inputType = dyn_cast<RankedTensorType>(op.getInputs().front().getType());
-  if (!inputType || inputType.getRank() != 2)
-    return false;
-  if (!inputType.getElementType().isF16())
-    return false;
-  if (!inputType.hasStaticShape())
-    return false;
-
-  // Check output is 0D tensor of f16.
-  auto outputType = dyn_cast<RankedTensorType>(op.getOutputs().front().getType());
-  if (!outputType || outputType.getRank() != 0)
-    return false;
-  if (!outputType.getElementType().isF16())
-    return false;
 
   return true;
 }
@@ -251,68 +207,6 @@ struct ElementwiseLinalgToTinyTile : public OpRewritePattern<linalg::GenericOp> 
 };
 
 //===----------------------------------------------------------------------===//
-// Conversion pattern for reduction linalg.generic
-//===----------------------------------------------------------------------===//
-
-/// Convert a full reduction linalg.generic to tiny_tile.reduce.
-///
-/// This pattern handles linalg.generic ops where:
-/// - All iterator types are reduction
-/// - Input is a 2D tensor of f16
-/// - Output is a scalar (0D tensor) of f16
-///
-/// The conversion:
-/// 1. Converts input tensor to pointer (tiny_tensor.to_ptr)
-/// 2. Loads tile from pointer (tiny_tile.load)
-/// 3. Reduces tile to scalar (tiny_tile.reduce)
-/// 4. Wraps scalar in 0D tensor (tensor.from_elements)
-struct ReductionLinalgToTinyTile : public OpRewritePattern<linalg::GenericOp> {
-  using OpRewritePattern<linalg::GenericOp>::OpRewritePattern;
-
-  LogicalResult matchAndRewrite(linalg::GenericOp op,
-                                PatternRewriter &rewriter) const override {
-    // Check if this is a supported reduction operation.
-    if (!isFullReduction(op))
-      return failure();
-
-    Location loc = op.getLoc();
-    MLIRContext *context = rewriter.getContext();
-
-    // Create constants for offsets.
-    Value c0 = rewriter.create<arith::ConstantIndexOp>(loc, 0);
-
-    // Get the input tensor type to determine tile dimensions.
-    auto inputTensorType = cast<RankedTensorType>(
-        op.getInputs().front().getType());
-    int64_t width = inputTensorType.getDimSize(1);
-    Value stride = rewriter.create<arith::ConstantIndexOp>(loc, width);
-
-    // Create the tile type.
-    auto tileType = getTileTypeForTensor(inputTensorType, context);
-
-    // Convert input tensor to pointer and load tile.
-    Value ptr = rewriter.create<ToPtrOp>(loc,
-        tiny::PtrType::get(context), op.getInputs().front());
-    Value tile = rewriter.create<tiny_tile::LoadOp>(loc, tileType, ptr,
-                                                     c0, c0, stride);
-
-    // Reduce the tile to a scalar.
-    auto f16Type = rewriter.getF16Type();
-    Value sum = rewriter.create<tiny_tile::ReduceOp>(loc, f16Type, tile);
-
-    // Wrap the scalar in a 0D tensor.
-    auto outputType = cast<RankedTensorType>(op.getOutputs().front().getType());
-    Value result = rewriter.create<tensor::FromElementsOp>(loc, outputType,
-                                                            ValueRange{sum});
-
-    // Replace the linalg.generic with the result tensor.
-    rewriter.replaceOp(op, result);
-
-    return success();
-  }
-};
-
-//===----------------------------------------------------------------------===//
 // LinalgToTinyTile pass implementation
 //===----------------------------------------------------------------------===//
 
@@ -322,7 +216,6 @@ public:
     // Set up rewrite patterns.
     RewritePatternSet patterns(&getContext());
     patterns.add<ElementwiseLinalgToTinyTile>(&getContext());
-    patterns.add<ReductionLinalgToTinyTile>(&getContext());
 
     // Apply patterns greedily to convert all matching linalg.generic ops.
     if (failed(applyPatternsGreedily(getOperation(), std::move(patterns))))

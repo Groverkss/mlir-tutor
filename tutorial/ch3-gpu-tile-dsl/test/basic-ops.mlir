@@ -50,11 +50,11 @@ func.func @test_load_store(%ptr: !tiny.ptr, %row: index, %col: index, %stride: i
   return
 }
 
-// CHECK-LABEL: func.func @test_reduce
-func.func @test_reduce(%tile: !tiny_tile.tile<32x16, #L>) -> f16 {
-  // CHECK: tiny_tile.reduce
-  %sum = tiny_tile.reduce %tile : !tiny_tile.tile<32x16, #L> -> f16
-  return %sum : f16
+// CHECK-LABEL: func.func @test_sum
+func.func @test_sum(%tile: !tiny_tile.tile<32x16, #L>) -> vector<1xf16> {
+  // CHECK: tiny_tile.sum
+  %sum = tiny_tile.sum %tile : !tiny_tile.tile<32x16, #L> -> vector<1xf16>
+  return %sum : vector<1xf16>
 }
 
 // CHECK-LABEL: func.func @test_splat

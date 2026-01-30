@@ -13,6 +13,8 @@
 
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/GPU/IR/GPUDialect.h"
+#include "mlir/Dialect/SCF/IR/SCF.h"
+#include "mlir/Dialect/SCF/Transforms/Patterns.h"
 #include "mlir/Dialect/Vector/IR/VectorOps.h"
 #include "mlir/IR/PatternMatch.h"
 #include "mlir/Pass/Pass.h"
@@ -192,16 +194,17 @@ struct StoreOpLowering : public OpConversionPattern<StoreOp> {
   }
 };
 
-/// Lowers: tiny_tile.reduce %tile
+/// Lowers: tiny_tile.sum %tile
 /// Produces:
 ///   %local = tiny.sum %tile : vector<Vxf16> -> vector<1xf16>
 ///   %scalar = vector.extract %local[0] : f16
-///   %result = gpu.all_reduce add %scalar : f16
-struct ReduceOpLowering : public OpConversionPattern<ReduceOp> {
-  using OpConversionPattern<ReduceOp>::OpConversionPattern;
+///   %global = gpu.all_reduce add %scalar : f16
+///   %result = vector.broadcast %global : f16 to vector<1xf16>
+struct SumOpLowering : public OpConversionPattern<SumOp> {
+  using OpConversionPattern<SumOp>::OpConversionPattern;
 
   LogicalResult
-  matchAndRewrite(ReduceOp op, OpAdaptor adaptor,
+  matchAndRewrite(SumOp op, OpAdaptor adaptor,
                   ConversionPatternRewriter &rewriter) const override {
     Location loc = op.getLoc();
 
@@ -221,7 +224,11 @@ struct ReduceOpLowering : public OpConversionPattern<ReduceOp> {
     Value globalSum = gpu::AllReduceOp::create(rewriter, loc, scalar.getType(),
                                                ValueRange{scalar}, props);
 
-    rewriter.replaceOp(op, globalSum);
+    // Wrap result back to vector<1xf16> for compatibility with tiny.store.
+    Value result =
+        vector::BroadcastOp::create(rewriter, loc, vec1Type, globalSum);
+
+    rewriter.replaceOp(op, result);
     return success();
   }
 };
@@ -271,10 +278,17 @@ public:
     target.addLegalDialect<arith::ArithDialect>();
     target.addLegalDialect<vector::VectorDialect>();
 
+    // Mark SCF ops as dynamically legal (legal if types are converted).
+    target.addDynamicallyLegalDialect<scf::SCFDialect>(
+        [&](Operation *op) { return typeConverter.isLegal(op); });
+
     // Set up rewrite patterns.
     RewritePatternSet patterns(&getContext());
     patterns.add<ElementwiseOpLowering, LoadOpLowering, StoreOpLowering,
-                 ReduceOpLowering, SplatOpLowering>(typeConverter, &getContext());
+                 SumOpLowering, SplatOpLowering>(typeConverter, &getContext());
+
+    // Add SCF structural type conversion patterns.
+    scf::populateSCFStructuralTypeConversions(typeConverter, patterns);
 
     // Apply the conversion.
     if (failed(applyPartialConversion(getOperation(), target,

@@ -199,21 +199,29 @@ def TinyTile_ElementwiseOp : TinyTile_Op<"elementwise", [Pure]> {
   let hasVerifier = 1;
 }
 
-def TinyTile_ReduceOp : TinyTile_Op<"reduce", [Pure]> {
-  let summary = "Reduce all elements of a tile to a scalar.";
+def TinyTile_Vec1F16 : Type<
+  CPred<"::llvm::isa<VectorType>($_self) && "
+        "::llvm::cast<VectorType>($_self).getShape() == ArrayRef<int64_t>{1} && "
+        "::llvm::cast<VectorType>($_self).getElementType().isF16()">,
+  "vector<1xf16>",
+  "VectorType"
+>;
+
+def TinyTile_SumOp : TinyTile_Op<"sum", [Pure]> {
+  let summary = "Sum all elements of a tile to a vector<1xf16>.";
   let description = [{
-    Reduces all elements of a tile using addition, producing a scalar f16.
+    Sums all elements of a tile using addition, producing a vector<1xf16>.
     This performs a full reduction across all dimensions and all threads.
 
     Example:
     ```mlir
-    %sum = tiny_tile.reduce %tile
-        : !tiny_tile.tile<64x128, #tiny_tile.layout<...>> -> f16
+    %sum = tiny_tile.sum %tile
+        : !tiny_tile.tile<64x128, #tiny_tile.layout<...>> -> vector<1xf16>
     ```
   }];
 
   let arguments = (ins TinyTile_Tile:$input);
-  let results = (outs F16:$result);
+  let results = (outs TinyTile_Vec1F16:$result);
 
   let assemblyFormat = "$input attr-dict `:` type($input) `->` type($result)";
 }

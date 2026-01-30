@@ -12,7 +12,11 @@ from ..compiler import MLIRModule, TutorialOpt
 
 def _wrap_value(value: Value, template):
     """Wrap MLIR value using the same type as template."""
-    return type(template)._wrap(value)
+    # Try passing template for types that need it (e.g., Tile)
+    try:
+        return type(template)._wrap(value, template=template)
+    except TypeError:
+        return type(template)._wrap(value)
 
 
 def accumulate(bound: Index, step: Index, inits: list = None):
