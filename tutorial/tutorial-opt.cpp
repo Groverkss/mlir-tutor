@@ -22,6 +22,9 @@
 #include "ch3-gpu-tile-dsl/TinyTileDialect.h"
 #include "ch3-gpu-tile-dsl/TinyTilePasses.h"
 
+// Chapter 4: Transform dialect extension for linalg transforms
+#include "ch4-linalg-transforms/TinyTransformOps.h"
+
 int main(int argc, char **argv) {
   mlir::DialectRegistry registry;
 
@@ -43,6 +46,9 @@ int main(int argc, char **argv) {
   mlir::tiny::registerPasses();
   mlir::tiny_loop::registerPasses();
   mlir::tiny_tile::registerPasses();
+
+  // Register Chapter 4 transform extension.
+  mlir::tiny::registerTinyTransformExtension(registry);
 
   return mlir::asMainReturnCode(
       mlir::MlirOptMain(argc, argv, "Tutorial optimizer driver\n", registry));

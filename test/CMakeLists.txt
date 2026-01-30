@@ -35,3 +35,9 @@ add_custom_target(check-tutorial-ch3
   DEPENDS ${TUTORIAL_TEST_DEPENDS}
   COMMENT "Running ch3 tests"
 )
+
+add_custom_target(check-tutorial-ch4
+  COMMAND lit ${CMAKE_CURRENT_BINARY_DIR} --filter=ch4-linalg-transforms -v
+  DEPENDS ${TUTORIAL_TEST_DEPENDS}
+  COMMENT "Running ch4 tests"
+)

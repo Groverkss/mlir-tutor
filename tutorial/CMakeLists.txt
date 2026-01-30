@@ -6,6 +6,7 @@
 add_subdirectory(ch1-cpu-vector-dsl)
 add_subdirectory(ch2-cpu-vector-dsl-loops)
 add_subdirectory(ch3-gpu-tile-dsl)
+add_subdirectory(ch4-linalg-transforms)
 
 set(LLVM_LINK_COMPONENTS
   Support
@@ -36,6 +37,7 @@ target_link_libraries(tutorial-opt
   TinyDialect
   TinyLoopDialect
   TinyTileDialect
+  TinyTransformExtension
 )
 
 # Include tutorial headers.
