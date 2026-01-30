@@ -6,44 +6,38 @@ from tiny.ch3 import (
     block_id_x, compile_and_print,
 )
 
-# 8x32 tile = 256 elements
-# 32 threads (8x4), each handles 8 elements
-LAYOUT = Layout(thread=(8, 4), vector_size=8)
-TILE_H, TILE_W = 8, 32
+# 1x256 tile = 256 elements
+# 32 threads (1x32), each handles 8 elements
+LAYOUT = Layout(thread=(1, 32), vector_size=8)
+TILE_H, TILE_W = 1, 256
 
 
 @compile_and_print
-def dot(a: Ptr, b: Ptr, out: Ptr, tiles_per_block: Index, stride: Index):
-    """SPMD tiled dot product: each block computes a partial sum.
+def dot(a: Ptr, b: Ptr, out: Ptr, M: Index, K: Index):
+    """
+    Given two arrays of shape MxK, we perform a dot product over them.
 
-    Each GPU block processes `tiles_per_block` tiles starting from its
-    block-specific offset. The partial sum is stored to out[block_id].
+    c = sum(a * b)
 
-    For a complete dot product, launch with enough blocks to cover all data
-    and reduce the partial sums on the host or with a separate kernel.
+    Each block processes a tile of 1xK elements, running over tile of 1x256
+    in one go, and them computing a sum over them at the end.
     """
     # Get block ID - each block processes a different chunk of data
     bid = block_id_x()
 
     zero = Index.constant(0)
-    one = Index.constant(1)
-    tile_size = Index.constant(TILE_H * TILE_W)
-
-    # Compute starting offset for this block
-    block_offset = bid * tiles_per_block * tile_size
+    tile_w = Index.constant(TILE_W)
 
     # Initialize accumulator tile to zeros
     acc_init = Tile.zeros(TILE_H, TILE_W, LAYOUT)
 
-    # Accumulate loop over tiles assigned to this block
-    @accumulate(tiles_per_block, one, inits=[acc_init])
+    # Run a loop over the K dimension, processing a tile of 1x256 elements at
+    # once.
+    @accumulate(K, tile_w, inits=[acc_init])
     def _(tile_idx: Index, acc: Tile):
-        # Compute offset for this tile within the block's chunk
-        offset = block_offset + tile_idx * tile_size
-
-        # Load tiles from a and b
-        a_tile = load_tile(a, zero, offset, stride, TILE_H, TILE_W, LAYOUT)
-        b_tile = load_tile(b, zero, offset, stride, TILE_H, TILE_W, LAYOUT)
+        # Load a[bid,tile_idx : tile_idx + tile_w]
+        a_tile = load_tile(a, bid, tile_idx, K, TILE_H, TILE_W, LAYOUT)
+        b_tile = load_tile(b, bid, tile_idx, K, TILE_H, TILE_W, LAYOUT)
 
         # Accumulate element-wise product
         return acc + a_tile * b_tile
@@ -52,5 +46,5 @@ def dot(a: Ptr, b: Ptr, out: Ptr, tiles_per_block: Index, stride: Index):
     final_acc = _[0]
     result = final_acc.sum()
 
-    # Store this block's partial sum to out[block_id]
+    # Store this block's sum to out[block_id]
     out.store(bid, result)

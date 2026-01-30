@@ -1,4 +1,5 @@
-//===- TinyTileToTiny.cpp - Convert tiny_tile to tiny dialect ----*- C++ -*-===//
+//===- TinyTileToTiny.cpp - Convert tiny_tile to tiny dialect ----*- C++
+//-*-===//
 //
 // This pass converts tiny_tile operations to per-thread tiny vector operations.
 //
@@ -7,9 +8,9 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "ch3-gpu-tile-dsl/TinyTilePasses.h"
-#include "ch3-gpu-tile-dsl/TinyTileDialect.h"
 #include "ch1-cpu-vector-dsl/TinyDialect.h"
+#include "ch3-gpu-tile-dsl/TinyTileDialect.h"
+#include "ch3-gpu-tile-dsl/TinyTilePasses.h"
 
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/GPU/IR/GPUDialect.h"
@@ -69,9 +70,9 @@ static Value computeThreadOffset(OpBuilder &builder, Location loc,
   // Compute linear thread ID: tid_y * thread[0] + tid_x
   Value threadRowsConst =
       arith::ConstantOp::create(builder, loc, builder.getIndexAttr(threadRows));
-  Value linearTid =
-      arith::AddIOp::create(builder, loc, tidX,
-          arith::MulIOp::create(builder, loc, tidY, threadRowsConst));
+  Value linearTid = arith::AddIOp::create(
+      builder, loc, tidX,
+      arith::MulIOp::create(builder, loc, tidY, threadRowsConst));
 
   // Compute thread offset: linear_tid * vector_size
   Value vectorSizeConst =
@@ -214,19 +215,16 @@ struct SumOpLowering : public OpConversionPattern<SumOp> {
         tiny::SumOp::create(rewriter, loc, vec1Type, adaptor.getInput());
 
     // Extract the scalar from vector<1xf16>.
-    Value scalar =
-        vector::ExtractOp::create(rewriter, loc, localSum, ArrayRef<int64_t>{0});
+    Value scalar = vector::ExtractOp::create(rewriter, loc, localSum,
+                                             ArrayRef<int64_t>{0});
 
-    // Perform cross-thread reduction using gpu.all_reduce.
-    gpu::AllReduceOp::Properties props;
-    props.op = gpu::AllReduceOperationAttr::get(rewriter.getContext(),
-                                                gpu::AllReduceOperation::ADD);
-    Value globalSum = gpu::AllReduceOp::create(rewriter, loc, scalar.getType(),
-                                               ValueRange{scalar}, props);
+    // Perform cross-thread reduction using gpu.subgroup_reduce.
+    Value subgroupSum = gpu::SubgroupReduceOp::create(
+        rewriter, loc, scalar, gpu::AllReduceOperation::ADD, /*uniform=*/true);
 
     // Wrap result back to vector<1xf16> for compatibility with tiny.store.
     Value result =
-        vector::BroadcastOp::create(rewriter, loc, vec1Type, globalSum);
+        vector::BroadcastOp::create(rewriter, loc, vec1Type, subgroupSum);
 
     rewriter.replaceOp(op, result);
     return success();
