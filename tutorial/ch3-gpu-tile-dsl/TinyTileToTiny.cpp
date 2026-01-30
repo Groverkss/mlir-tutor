@@ -37,12 +37,8 @@ public:
     // Identity conversion for all types (fallback).
     addConversion([](Type type) { return type; });
 
-    // Convert TileType with layout to VectorType.
+    // Convert TileType to VectorType (layout is always present).
     addConversion([](TileType tileType) -> Type {
-      if (!tileType.hasLayout()) {
-        // Cannot convert tiles without layout.
-        return nullptr;
-      }
       return tileType.getPerThreadVectorType();
     });
   }
@@ -95,10 +91,6 @@ static Value computeBaseOffset(OpBuilder &builder, Location loc, Value row,
 /// Lowers: tiny_tile.elementwise {add,sub,mul,div} %lhs, %rhs
 /// Produces:
 ///   %result = tiny.{addf,subf,mulf,divf} %lhs, %rhs : vector<Vxf16>
-///
-/// The operands are already converted to per-thread vectors by the type
-/// converter; this pattern simply maps the elementwise kind to the
-/// corresponding tiny operation.
 struct ElementwiseOpLowering : public OpConversionPattern<ElementwiseOp> {
   using OpConversionPattern<ElementwiseOp>::OpConversionPattern;
 
@@ -108,7 +100,6 @@ struct ElementwiseOpLowering : public OpConversionPattern<ElementwiseOp> {
     Value lhs = adaptor.getLhs();
     Value rhs = adaptor.getRhs();
 
-    // Create the appropriate tiny operation based on kind.
     switch (op.getKind()) {
     case ElementwiseKind::add:
       rewriter.replaceOpWithNewOp<tiny::AddFOp>(op, lhs, rhs);
@@ -130,16 +121,10 @@ struct ElementwiseOpLowering : public OpConversionPattern<ElementwiseOp> {
 
 /// Lowers: tiny_tile.load %ptr, %row, %col stride %stride
 /// Produces:
-///   %base = arith.muli %row, %stride
-///   %base_off = arith.addi %base, %col
-///   %tid_x = gpu.thread_id x
-///   %tid_y = gpu.thread_id y
-///   %linear_tid = arith.addi %tid_x, (arith.muli %tid_y, thread[0])
-///   %thread_off = arith.muli %linear_tid, vector_size
-///   %offset = arith.addi %base_off, %thread_off
+///   %base_off = row * stride + col
+///   %thread_off = linear_tid * vector_size
+///   %offset = base_off + thread_off
 ///   %result = tiny.load %ptr, %offset : vector<Vxf16>
-///
-/// Computes the per-thread memory offset based on layout parameters.
 struct LoadOpLowering : public OpConversionPattern<LoadOp> {
   using OpConversionPattern<LoadOp>::OpConversionPattern;
 
@@ -148,12 +133,8 @@ struct LoadOpLowering : public OpConversionPattern<LoadOp> {
                   ConversionPatternRewriter &rewriter) const override {
     Location loc = op.getLoc();
 
-    // Get the tile type and its layout.
     auto tileType = cast<TileType>(op.getResult().getType());
     LayoutAttr layout = tileType.getLayout();
-    if (!layout) {
-      return op.emitError() << "load requires tile with layout";
-    }
 
     // Compute base offset: row * stride + col.
     Value baseOffset = computeBaseOffset(rewriter, loc, adaptor.getRow(),
@@ -177,16 +158,10 @@ struct LoadOpLowering : public OpConversionPattern<LoadOp> {
 
 /// Lowers: tiny_tile.store %value, %ptr, %row, %col stride %stride
 /// Produces:
-///   %base = arith.muli %row, %stride
-///   %base_off = arith.addi %base, %col
-///   %tid_x = gpu.thread_id x
-///   %tid_y = gpu.thread_id y
-///   %linear_tid = arith.addi %tid_x, (arith.muli %tid_y, thread[0])
-///   %thread_off = arith.muli %linear_tid, vector_size
-///   %offset = arith.addi %base_off, %thread_off
+///   %base_off = row * stride + col
+///   %thread_off = linear_tid * vector_size
+///   %offset = base_off + thread_off
 ///   tiny.store %value, %ptr, %offset : vector<Vxf16>
-///
-/// Same offset computation as load, then stores the per-thread vector.
 struct StoreOpLowering : public OpConversionPattern<StoreOp> {
   using OpConversionPattern<StoreOp>::OpConversionPattern;
 
@@ -195,12 +170,8 @@ struct StoreOpLowering : public OpConversionPattern<StoreOp> {
                   ConversionPatternRewriter &rewriter) const override {
     Location loc = op.getLoc();
 
-    // Get the tile type and its layout.
     auto tileType = cast<TileType>(op.getValue().getType());
     LayoutAttr layout = tileType.getLayout();
-    if (!layout) {
-      return op.emitError() << "store requires tile with layout";
-    }
 
     // Compute base offset: row * stride + col.
     Value baseOffset = computeBaseOffset(rewriter, loc, adaptor.getRow(),
@@ -226,9 +197,6 @@ struct StoreOpLowering : public OpConversionPattern<StoreOp> {
 ///   %local = tiny.sum %tile : vector<Vxf16> -> vector<1xf16>
 ///   %scalar = vector.extract %local[0] : f16
 ///   %result = gpu.all_reduce add %scalar : f16
-///
-/// First reduces the per-thread vector locally, then performs a cross-thread
-/// reduction using gpu.all_reduce to sum across all threads in the workgroup.
 struct ReduceOpLowering : public OpConversionPattern<ReduceOp> {
   using OpConversionPattern<ReduceOp>::OpConversionPattern;
 
@@ -247,7 +215,6 @@ struct ReduceOpLowering : public OpConversionPattern<ReduceOp> {
         vector::ExtractOp::create(rewriter, loc, localSum, ArrayRef<int64_t>{0});
 
     // Perform cross-thread reduction using gpu.all_reduce.
-    // Set up properties for the all_reduce operation.
     gpu::AllReduceOp::Properties props;
     props.op = gpu::AllReduceOperationAttr::get(rewriter.getContext(),
                                                 gpu::AllReduceOperation::ADD);
@@ -259,42 +226,16 @@ struct ReduceOpLowering : public OpConversionPattern<ReduceOp> {
   }
 };
 
-/// Lowers: tiny_tile.layout_cast %input
-/// Produces: (no IR change - identity conversion)
-///
-/// Layout cast is purely a type-level annotation for layout propagation.
-/// After type conversion, both input and output become the same vector type,
-/// so this pattern simply forwards the converted input value.
-struct LayoutCastOpLowering : public OpConversionPattern<LayoutCastOp> {
-  using OpConversionPattern<LayoutCastOp>::OpConversionPattern;
-
-  LogicalResult
-  matchAndRewrite(LayoutCastOp op, OpAdaptor adaptor,
-                  ConversionPatternRewriter &rewriter) const override {
-    // Simply forward the input - layout_cast is just a type annotation.
-    rewriter.replaceOp(op, adaptor.getInput());
-    return success();
-  }
-};
-
 /// Lowers: tiny_tile.splat <value>
 /// Produces:
 ///   %result = tiny.constant dense<<value>> : vector<Vxf16>
-///
-/// Creates a per-thread vector constant where all elements have the splat value.
-/// The vector size comes from the layout's vector_size parameter.
 struct SplatOpLowering : public OpConversionPattern<SplatOp> {
   using OpConversionPattern<SplatOp>::OpConversionPattern;
 
   LogicalResult
   matchAndRewrite(SplatOp op, OpAdaptor adaptor,
                   ConversionPatternRewriter &rewriter) const override {
-    // Get the tile type and its layout.
     auto tileType = cast<TileType>(op.getResult().getType());
-    LayoutAttr layout = tileType.getLayout();
-    if (!layout) {
-      return op.emitError() << "splat requires tile with layout";
-    }
 
     // Get the per-thread vector type.
     VectorType vectorType = tileType.getPerThreadVectorType();
@@ -317,10 +258,8 @@ struct SplatOpLowering : public OpConversionPattern<SplatOp> {
 class TinyTileToTinyPass : public impl::TinyTileToTinyBase<TinyTileToTinyPass> {
 public:
   void runOnOperation() override {
-    // Set up the type converter.
     TinyTileToTinyTypeConverter typeConverter;
 
-    // Set up the conversion target.
     ConversionTarget target(getContext());
 
     // Mark tiny_tile operations as illegal.
@@ -335,8 +274,7 @@ public:
     // Set up rewrite patterns.
     RewritePatternSet patterns(&getContext());
     patterns.add<ElementwiseOpLowering, LoadOpLowering, StoreOpLowering,
-                 ReduceOpLowering, LayoutCastOpLowering, SplatOpLowering>(
-        typeConverter, &getContext());
+                 ReduceOpLowering, SplatOpLowering>(typeConverter, &getContext());
 
     // Apply the conversion.
     if (failed(applyPartialConversion(getOperation(), target,

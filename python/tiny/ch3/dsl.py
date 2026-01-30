@@ -21,10 +21,10 @@ class Tile:
     _value: Value
     _height: int
     _width: int
-    _layout: Layout | None
+    _layout: Layout
 
     @staticmethod
-    def _wrap(value: Value, height: int, width: int, layout: Layout = None) -> "Tile":
+    def _wrap(value: Value, height: int, width: int, layout: Layout) -> "Tile":
         t = Tile()
         t._value = value
         t._height = height
@@ -33,18 +33,18 @@ class Tile:
         return t
 
     @staticmethod
-    def _get_type(height: int, width: int, layout: Layout = None) -> Type:
-        if layout:
-            return Type.parse(
-                f"!tiny_tile.tile<{height}x{width}, "
-                f"#tiny_tile.layout<thread = [{layout.thread[0]}, {layout.thread[1]}], "
-                f"vector_size = {layout.vector_size}>>"
-            )
-        return Type.parse(f"!tiny_tile.tile<{height}x{width}>")
+    def _get_type(height: int, width: int, layout: Layout) -> Type:
+        return Type.parse(
+            f"!tiny_tile.tile<{height}x{width}, "
+            f"#tiny_tile.layout<thread = [{layout.thread[0]}, {layout.thread[1]}], "
+            f"vector_size = {layout.vector_size}>>"
+        )
 
     def _binop(self, other: "Tile", kind: str) -> "Tile":
+        if self._layout.thread != other._layout.thread or \
+           self._layout.vector_size != other._layout.vector_size:
+            raise ValueError("Operands must have the same layout")
         result_type = Tile._get_type(self._height, self._width, self._layout)
-        # EnumAttr syntax: #tiny_tile<ew_kind mul>
         kind_attr = Attribute.parse(f"#tiny_tile<ew_kind {kind}>")
         op = Operation.create(
             "tiny_tile.elementwise",
@@ -85,23 +85,12 @@ class Tile:
         )
         return op.result
 
-    def layout_cast(self, new_layout: "Layout | None" = None) -> "Tile":
-        """Cast tile to a different layout (or strip layout if None)."""
-        result_type = Tile._get_type(self._height, self._width, new_layout)
-        op = Operation.create(
-            "tiny_tile.layout_cast",
-            results=[result_type],
-            operands=[self._value],
-        )
-        return Tile._wrap(op.result, self._height, self._width, new_layout)
-
 
 def load_tile(ptr: Ptr, row: Index, col: Index, stride: Index,
               height: int, width: int, layout: Layout) -> Tile:
     """Load a tile from memory (tiny_tile.load).
 
     The layout specifies how elements are distributed across threads.
-    Layout propagation will flow this through subsequent operations.
     """
     tile_type = Tile._get_type(height, width, layout)
     op = Operation.create(
@@ -149,11 +138,7 @@ def compile_and_print(fn):
     print("=== TinyTile Dialect ===")
     print(tile_ir)
 
-    layout_ir = opt.run(tile_ir, ["tiny-tile-layout-propagation"])
-    print("=== After layout propagation ===")
-    print(layout_ir)
-
-    tiny_ir = opt.run(layout_ir, ["tiny-tile-to-tiny", "canonicalize", "cse"])
+    tiny_ir = opt.run(tile_ir, ["tiny-tile-to-tiny", "canonicalize", "cse"])
     print("=== After tiny-tile-to-tiny ===")
     print(tiny_ir)
 

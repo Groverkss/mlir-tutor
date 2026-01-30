@@ -14,7 +14,6 @@ include "mlir/IR/AttrTypeBase.td"
 include "mlir/IR/EnumAttr.td"
 include "mlir/Interfaces/InferTypeOpInterface.td"
 include "mlir/Interfaces/SideEffectInterfaces.td"
-include "TinyTileInterfaces.td"
 
 // Type constraint for tiny.ptr from ch1 (for load/store operations).
 // This references the C++ type defined in ch1-cpu-vector-dsl/TinyDialect.h.
@@ -33,7 +32,7 @@ def TinyTile_Dialect : Dialect {
   let summary = "A tile-based GPU DSL dialect";
   let description = [{
     The TinyTile dialect provides tile-based operations for GPU programming.
-    Tiles are 2D arrays with static dimensions that can be distributed across
+    Tiles are 2D arrays with static dimensions that are distributed across
     GPU threads using a layout attribute.
   }];
   let cppNamespace = "::mlir::tiny_tile";
@@ -98,29 +97,26 @@ def TinyTile_LayoutAttr : AttrDef<TinyTile_Dialect, "Layout"> {
 
 def TinyTile_TileType : TypeDef<TinyTile_Dialect, "Tile"> {
   let mnemonic = "tile";
-  let summary = "A 2D tile of f16 data with static dimensions.";
+  let summary = "A 2D tile of f16 data with static dimensions and layout.";
   let description = [{
-    The tile type represents a 2D block of f16 data with static dimensions.
+    The tile type represents a 2D block of f16 data with static dimensions
+    and a layout describing how it is distributed across GPU threads.
     Dimensions must be powers of 2.
 
-    Optionally includes a layout attribute describing how the tile is
-    distributed across GPU threads.
-
-    Examples:
+    Example:
     ```mlir
-    !tiny_tile.tile<64x128>                           // No layout (abstract)
-    !tiny_tile.tile<64x128, #tiny_tile.layout<...>>   // With layout
+    !tiny_tile.tile<64x128, #tiny_tile.layout<thread=[16,4], vector_size=8>>
     ```
   }];
 
   let parameters = (ins
     "int64_t":$height,
     "int64_t":$width,
-    OptionalParameter<"LayoutAttr">:$layout
+    "LayoutAttr":$layout
   );
 
   // Use custom parser/printer because the lexer treats "64x128" as a dimension
-  // list token. We want `<64x128>` syntax, not `<64, 128>`.
+  // list token. We want `<64x128, layout>` syntax.
   let hasCustomAssemblyFormat = 1;
 
   let genVerifyDecl = 1;
@@ -129,10 +125,7 @@ def TinyTile_TileType : TypeDef<TinyTile_Dialect, "Tile"> {
     /// Returns the total number of elements in the tile.
     int64_t getNumElements() const { return getHeight() * getWidth(); }
 
-    /// Returns true if this tile has a layout attached.
-    bool hasLayout() const { return getLayout() != nullptr; }
-
-    /// Returns the per-thread vector type (when layout is present).
+    /// Returns the per-thread vector type.
     VectorType getPerThreadVectorType() const;
   }];
 }
@@ -177,20 +170,20 @@ def TinyTile_ElementwiseKindAttr :
 // Operations
 //===----------------------------------------------------------------------===//
 
-def TinyTile_ElementwiseOp : TinyTile_Op<"elementwise",
-    [Pure, DeclareOpInterfaceMethods<TinyTile_LayoutInterface>]> {
+def TinyTile_ElementwiseOp : TinyTile_Op<"elementwise", [Pure]> {
   let summary = "Element-wise binary operation on tiles.";
   let description = [{
     Performs an element-wise binary operation on two tiles.
     The kind attribute specifies the operation (add, sub, mul, div).
 
-    All operands and the result must have the same tile dimensions (height x width),
-    but may have different layouts. Layout propagation will insert layout_cast
-    operations where needed.
+    All operands and the result must have the same tile dimensions and layout.
 
     Example:
     ```mlir
-    %c = tiny_tile.elementwise add %a, %b : !tiny_tile.tile<64x128>
+    %c = tiny_tile.elementwise add %a, %b
+        : !tiny_tile.tile<64x128, #tiny_tile.layout<...>>,
+          !tiny_tile.tile<64x128, #tiny_tile.layout<...>>
+       -> !tiny_tile.tile<64x128, #tiny_tile.layout<...>>
     ```
   }];
 
@@ -206,8 +199,7 @@ def TinyTile_ElementwiseOp : TinyTile_Op<"elementwise",
   let hasVerifier = 1;
 }
 
-def TinyTile_ReduceOp : TinyTile_Op<"reduce",
-    [Pure, DeclareOpInterfaceMethods<TinyTile_LayoutInterface>]> {
+def TinyTile_ReduceOp : TinyTile_Op<"reduce", [Pure]> {
   let summary = "Reduce all elements of a tile to a scalar.";
   let description = [{
     Reduces all elements of a tile using addition, producing a scalar f16.
@@ -215,7 +207,8 @@ def TinyTile_ReduceOp : TinyTile_Op<"reduce",
 
     Example:
     ```mlir
-    %sum = tiny_tile.reduce %tile : !tiny_tile.tile<64x128> -> f16
+    %sum = tiny_tile.reduce %tile
+        : !tiny_tile.tile<64x128, #tiny_tile.layout<...>> -> f16
     ```
   }];
 
@@ -225,16 +218,17 @@ def TinyTile_ReduceOp : TinyTile_Op<"reduce",
   let assemblyFormat = "$input attr-dict `:` type($input) `->` type($result)";
 }
 
-def TinyTile_LoadOp : TinyTile_Op<"load",
-    [DeclareOpInterfaceMethods<TinyTile_LayoutInterface>]> {
+def TinyTile_LoadOp : TinyTile_Op<"load"> {
   let summary = "Load a tile from memory.";
   let description = [{
     Loads a tile from memory at the given pointer with row and column offsets.
     The stride specifies the number of f16 elements between rows in memory.
+    The result type must include a layout.
 
     Example:
     ```mlir
-    %tile = tiny_tile.load %ptr, %row, %col stride %s : !tiny.ptr -> !tiny_tile.tile<64x128>
+    %tile = tiny_tile.load %ptr, %row, %col stride %s
+        : !tiny.ptr -> !tiny_tile.tile<64x128, #tiny_tile.layout<...>>
     ```
   }];
 
@@ -249,8 +243,7 @@ def TinyTile_LoadOp : TinyTile_Op<"load",
   let assemblyFormat = "$ptr `,` $row `,` $col `stride` $stride attr-dict `:` type($ptr) `->` type($result)";
 }
 
-def TinyTile_StoreOp : TinyTile_Op<"store",
-    [DeclareOpInterfaceMethods<TinyTile_LayoutInterface>]> {
+def TinyTile_StoreOp : TinyTile_Op<"store"> {
   let summary = "Store a tile to memory.";
   let description = [{
     Stores a tile to memory at the given pointer with row and column offsets.
@@ -258,7 +251,8 @@ def TinyTile_StoreOp : TinyTile_Op<"store",
 
     Example:
     ```mlir
-    tiny_tile.store %tile, %ptr, %row, %col stride %s : !tiny_tile.tile<64x128>, !tiny.ptr
+    tiny_tile.store %tile, %ptr, %row, %col stride %s
+        : !tiny_tile.tile<64x128, #tiny_tile.layout<...>>, !tiny.ptr
     ```
   }];
 
@@ -273,42 +267,16 @@ def TinyTile_StoreOp : TinyTile_Op<"store",
   let assemblyFormat = "$value `,` $ptr `,` $row `,` $col `stride` $stride attr-dict `:` type($value) `,` type($ptr)";
 }
 
-def TinyTile_LayoutCastOp : TinyTile_Op<"layout_cast", [Pure]> {
-  let summary = "Cast a tile to a different layout.";
-  let description = [{
-    Converts a tile from one layout to another. This is used by the layout
-    propagation pass to insert explicit layout transitions.
-
-    The input and output tiles must have the same dimensions. The cast can:
-    - Add a layout to an unspecified tile
-    - Remove a layout from a tile
-    - Change from one layout to another (future use)
-
-    Example:
-    ```mlir
-    %with_layout = tiny_tile.layout_cast %tile
-        : !tiny_tile.tile<32x16> -> !tiny_tile.tile<32x16, #tiny_tile.layout<...>>
-    ```
-  }];
-
-  let arguments = (ins TinyTile_Tile:$input);
-  let results = (outs TinyTile_Tile:$result);
-
-  let assemblyFormat = "$input attr-dict `:` type($input) `->` type($result)";
-
-  let hasVerifier = 1;
-}
-
-def TinyTile_SplatOp : TinyTile_Op<"splat",
-    [Pure, DeclareOpInterfaceMethods<TinyTile_LayoutInterface>]> {
+def TinyTile_SplatOp : TinyTile_Op<"splat", [Pure]> {
   let summary = "Create a tile with all elements set to the same value.";
   let description = [{
     Creates a tile where all elements have the same f16 value.
-    The result type specifies the tile dimensions and optional layout.
+    The result type must include a layout.
 
     Example:
     ```mlir
-    %tile = tiny_tile.splat 1.0 : !tiny_tile.tile<32x16, #tiny_tile.layout<...>>
+    %tile = tiny_tile.splat 1.0
+        : !tiny_tile.tile<32x16, #tiny_tile.layout<...>>
     ```
   }];
 

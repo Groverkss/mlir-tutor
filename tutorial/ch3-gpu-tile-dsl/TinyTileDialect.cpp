@@ -1,6 +1,6 @@
 //===- TinyTileDialect.cpp - TinyTile dialect implementation -----*- C++ -*-===//
 //
-// Implements the TinyTile dialect, including verifiers and interface methods.
+// Implements the TinyTile dialect, including verifiers.
 //
 //===----------------------------------------------------------------------===//
 
@@ -80,30 +80,30 @@ LogicalResult TileType::verify(function_ref<InFlightDiagnostic()> emitError,
     return emitError() << "tile width must be a power of 2, got " << width;
   }
 
-  // If layout is present, verify tile elements match layout elements.
-  if (layout) {
-    int64_t tileElements = height * width;
-    int64_t layoutElements = layout.getNumElements();
-    if (tileElements != layoutElements) {
-      return emitError() << "tile has " << tileElements << " elements but layout covers "
-                         << layoutElements << " elements";
-    }
+  // Layout is required.
+  if (!layout) {
+    return emitError() << "tile type requires a layout";
+  }
+
+  // Verify tile elements match layout elements.
+  int64_t tileElements = height * width;
+  int64_t layoutElements = layout.getNumElements();
+  if (tileElements != layoutElements) {
+    return emitError() << "tile has " << tileElements << " elements but layout covers "
+                       << layoutElements << " elements";
   }
 
   return success();
 }
 
 VectorType TileType::getPerThreadVectorType() const {
-  if (!hasLayout())
-    return nullptr;
-
   auto layout = getLayout();
   auto elementType = Float16Type::get(getContext());
   return VectorType::get({layout.getVectorSize()}, elementType);
 }
 
 //===----------------------------------------------------------------------===//
-// ElementwiseOp verification and interface methods
+// ElementwiseOp verification
 //===----------------------------------------------------------------------===//
 
 LogicalResult ElementwiseOp::verify() {
@@ -128,116 +128,15 @@ LogicalResult ElementwiseOp::verify() {
                          << lhsType.getWidth();
   }
 
-  return success();
-}
-
-LayoutAttr ElementwiseOp::inferResultLayout(
-    unsigned resultIndex, ArrayRef<LayoutAttr> operandLayouts) {
-  // Result layout is the same as operand layouts (they must match).
-  for (auto layout : operandLayouts)
-    if (layout)
-      return layout;
-  return nullptr;
-}
-
-LayoutAttr ElementwiseOp::inferOperandLayout(
-    unsigned operandIndex, ArrayRef<LayoutAttr> resultLayouts) {
-  // Operands need the same layout as results.
-  for (auto layout : resultLayouts)
-    if (layout)
-      return layout;
-  return nullptr;
-}
-
-//===----------------------------------------------------------------------===//
-// ReduceOp interface methods
-//===----------------------------------------------------------------------===//
-
-LayoutAttr ReduceOp::inferResultLayout(unsigned resultIndex,
-                                       ArrayRef<LayoutAttr> operandLayouts) {
-  // Result is a scalar, no layout.
-  return nullptr;
-}
-
-LayoutAttr ReduceOp::inferOperandLayout(unsigned operandIndex,
-                                        ArrayRef<LayoutAttr> resultLayouts) {
-  // Cannot infer input layout from scalar output.
-  return nullptr;
-}
-
-//===----------------------------------------------------------------------===//
-// LoadOp interface methods
-//===----------------------------------------------------------------------===//
-
-LayoutAttr LoadOp::inferResultLayout(unsigned resultIndex,
-                                     ArrayRef<LayoutAttr> operandLayouts) {
-  // Result layout comes from the result type (source of truth for loads).
-  auto resultType = cast<TileType>(getResult().getType());
-  return resultType.getLayout();
-}
-
-LayoutAttr LoadOp::inferOperandLayout(unsigned operandIndex,
-                                      ArrayRef<LayoutAttr> resultLayouts) {
-  // Load has no tile operands, nothing to infer.
-  return nullptr;
-}
-
-//===----------------------------------------------------------------------===//
-// StoreOp interface methods
-//===----------------------------------------------------------------------===//
-
-LayoutAttr StoreOp::inferResultLayout(unsigned resultIndex,
-                                      ArrayRef<LayoutAttr> operandLayouts) {
-  // Store has no results.
-  return nullptr;
-}
-
-LayoutAttr StoreOp::inferOperandLayout(unsigned operandIndex,
-                                       ArrayRef<LayoutAttr> resultLayouts) {
-  // The value operand (index 0) should use the layout from the value type.
-  if (operandIndex == 0) {
-    auto valueType = cast<TileType>(getValue().getType());
-    return valueType.getLayout();
+  // All operands and result must have the same layout.
+  if (lhsType.getLayout() != rhsType.getLayout()) {
+    return emitOpError() << "operands must have the same layout";
   }
-  return nullptr;
-}
-
-//===----------------------------------------------------------------------===//
-// LayoutCastOp verification
-//===----------------------------------------------------------------------===//
-
-LogicalResult LayoutCastOp::verify() {
-  auto inputType = cast<TileType>(getInput().getType());
-  auto resultType = cast<TileType>(getResult().getType());
-
-  // Input and output must have the same dimensions.
-  if (inputType.getHeight() != resultType.getHeight() ||
-      inputType.getWidth() != resultType.getWidth()) {
-    return emitOpError() << "input and output tiles must have the same "
-                         << "dimensions, got " << inputType.getHeight() << "x"
-                         << inputType.getWidth() << " vs "
-                         << resultType.getHeight() << "x"
-                         << resultType.getWidth();
+  if (lhsType.getLayout() != resultType.getLayout()) {
+    return emitOpError() << "result must have the same layout as operands";
   }
 
   return success();
-}
-
-//===----------------------------------------------------------------------===//
-// SplatOp interface methods
-//===----------------------------------------------------------------------===//
-
-LayoutAttr SplatOp::inferResultLayout(unsigned resultIndex,
-                                         ArrayRef<LayoutAttr> operandLayouts) {
-  // Result layout comes from the result type (source of truth for constants).
-  auto resultType = cast<TileType>(getResult().getType());
-  return resultType.getLayout();
-}
-
-LayoutAttr SplatOp::inferOperandLayout(unsigned operandIndex,
-                                          ArrayRef<LayoutAttr> resultLayouts) {
-  // Constant has no tile operands, nothing to infer.
-  return nullptr;
 }
 
 //===----------------------------------------------------------------------===//
@@ -256,8 +155,8 @@ LayoutAttr SplatOp::inferOperandLayout(unsigned operandIndex,
 // cannot handle this, so we use parser.parseDimensionList().
 //
 
-/// Parse a tile type: `<` HxW (`,` layout)? `>`
-/// Example: <64x128> or <64x128, #tiny_tile.layout<thread=[16,4], vector_size=8>>
+/// Parse a tile type: `<` HxW `,` layout `>`
+/// Example: <64x128, #tiny_tile.layout<thread=[16,4], vector_size=8>>
 Type TileType::parse(AsmParser &parser) {
   if (parser.parseLess())
     return Type();
@@ -276,12 +175,13 @@ Type TileType::parse(AsmParser &parser) {
     return Type();
   }
 
-  // Parse optional layout attribute.
+  // Parse required comma and layout attribute.
+  if (parser.parseComma())
+    return Type();
+
   LayoutAttr layout;
-  if (succeeded(parser.parseOptionalComma())) {
-    if (parser.parseAttribute(layout))
-      return Type();
-  }
+  if (parser.parseAttribute(layout))
+    return Type();
 
   if (parser.parseGreater())
     return Type();
@@ -289,12 +189,9 @@ Type TileType::parse(AsmParser &parser) {
   return TileType::get(parser.getContext(), dims[0], dims[1], layout);
 }
 
-/// Print a tile type: `<` HxW (`,` layout)? `>`
+/// Print a tile type: `<` HxW `,` layout `>`
 void TileType::print(AsmPrinter &printer) const {
-  printer << "<" << getHeight() << "x" << getWidth();
-  if (auto layout = getLayout())
-    printer << ", " << layout;
-  printer << ">";
+  printer << "<" << getHeight() << "x" << getWidth() << ", " << getLayout() << ">";
 }
 
 //===----------------------------------------------------------------------===//
@@ -309,12 +206,6 @@ void TileType::print(AsmPrinter &printer) const {
 //===----------------------------------------------------------------------===//
 
 #include "ch3-gpu-tile-dsl/TinyTileEnums.cpp.inc"
-
-//===----------------------------------------------------------------------===//
-// TableGen'd interface definitions
-//===----------------------------------------------------------------------===//
-
-#include "ch3-gpu-tile-dsl/TinyTileInterfaces.cpp.inc"
 
 //===----------------------------------------------------------------------===//
 // TableGen'd operation definitions
