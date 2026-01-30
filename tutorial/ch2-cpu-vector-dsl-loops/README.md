@@ -58,7 +58,7 @@ operations: https://mlir.llvm.org/docs/Dialects/SCFDialect/ . Specifically, the
 scf.for operation:
 https://mlir.llvm.org/docs/Dialects/SCFDialect/#scffor-scfforop
 
-The pattern to implement has psuedo code of what needs to be implemented.
+The pattern to implement has pseudo code of what needs to be implemented.
 
 ## Playing around with the language
 
@@ -76,24 +76,24 @@ like.
 Try writing a dot product `sum(a * b)` in the language to get more familiar
 with it.
 
-## Excercise Implementations
+## Exercise Implementations
 
-Switch to `ch2-excercise` branch to access the excercises for ch2.
+Switch to `ch2-excercise` branch to access the exercises for ch2.
 
-### Excercise 1: TinyLoopToSCF Lowering Pass
+### Exercise 1: TinyLoopToSCF Lowering Pass
 
 Open the TinyLoopToSCF.cpp file. You will notice there is already a pass
 skeleton defined for you. You need to implement a pattern to rewrite
 the `tiny_loop.accumulate` operation to `scf.for` operation.
 
-There is psuedo-code to help you understand what should be emitted.
+There is pseudo-code to help you understand what should be emitted.
 
 Once done, try testing with `test/lower-to-scf.mlir` file, which should verify
 if the lowering works as expected. Note that if there is an error the flag
 `--mlir-print-ir-after-failure` helps see what the ir generated looks like if
 it failed, so you can debug what code you are producing.
 
-### Challenge Excercise (Optional)
+### Challenge Exercise (Optional)
 
 Try adding a `tiny_loop.if_zero` operation and lowering it to `scf.if` operation.
 Look at the `scf.if` operation for motivation.
