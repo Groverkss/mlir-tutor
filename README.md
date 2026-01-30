@@ -47,17 +47,10 @@ pip install -e python/
 export TUTORIAL_OPT=$PWD/build/tutorial/tutorial-opt
 ```
 
-3. Run an example:
+3. Run an example to verify:
 
 ```bash
-# Chapter 1: Vectorized square
-python examples/ch1/ch1_square.py
-
-# Chapter 2: Matrix multiplication with loops
-python examples/ch2/ch2_matmul.py
-
-# Chapter 3: GPU tile operations
-python examples/ch3/ch3_tile_elemwise.py
+python tutorial/ch1-cpu-vector-dsl/square.py
 ```
 
 The examples will print the generated MLIR at each lowering stage.
