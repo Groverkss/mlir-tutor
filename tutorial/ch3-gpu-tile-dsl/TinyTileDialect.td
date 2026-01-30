@@ -209,8 +209,8 @@ def TinyTile_Vec1F16 : Type<
   "VectorType"
 >;
 
-def TinyTile_SumOp : TinyTile_Op<"sum",
-    [Pure, DeclareOpInterfaceMethods<TinyTileLoweringOpInterface>]> {
+// TODO: Add DeclareOpInterfaceMethods<TinyTileLoweringOpInterface> to enable SIMT lowering
+def TinyTile_SumOp : TinyTile_Op<"sum", [Pure]> {
   let summary = "Sum all elements of a tile to a vector<1xf16>.";
   let description = [{
     Sums all elements of a tile using addition, producing a vector<1xf16>.
@@ -229,8 +229,8 @@ def TinyTile_SumOp : TinyTile_Op<"sum",
   let assemblyFormat = "$input attr-dict `:` type($input) `->` type($result)";
 }
 
-def TinyTile_LoadOp : TinyTile_Op<"load",
-    [DeclareOpInterfaceMethods<TinyTileLoweringOpInterface>]> {
+// TODO: Add DeclareOpInterfaceMethods<TinyTileLoweringOpInterface> to enable SIMT lowering
+def TinyTile_LoadOp : TinyTile_Op<"load", []> {
   let summary = "Load a tile from memory.";
   let description = [{
     Loads a tile from memory at the given pointer with row and column offsets.
@@ -255,8 +255,8 @@ def TinyTile_LoadOp : TinyTile_Op<"load",
   let assemblyFormat = "$ptr `,` $row `,` $col `stride` $stride attr-dict `:` type($ptr) `->` type($result)";
 }
 
-def TinyTile_StoreOp : TinyTile_Op<"store",
-    [DeclareOpInterfaceMethods<TinyTileLoweringOpInterface>]> {
+// TODO: Add DeclareOpInterfaceMethods<TinyTileLoweringOpInterface> to enable SIMT lowering
+def TinyTile_StoreOp : TinyTile_Op<"store", []> {
   let summary = "Store a tile to memory.";
   let description = [{
     Stores a tile to memory at the given pointer with row and column offsets.

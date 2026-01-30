@@ -291,159 +291,44 @@ LogicalResult ElementwiseOp::convertToSIMT(RewriterBase &rewriter,
   return success();
 }
 
-/// Convert tiny_tile.load to tiny.load with per-thread offset computation.
-///
-/// The tile load needs to be converted to a per-thread vector load. Each thread
-/// loads a contiguous chunk of `vector_size` elements from the tile.
-///
-/// Input operands (simtOperands):
-///   [0] ptr    - base pointer (!tiny.ptr)
-///   [1] row    - row offset (index)
-///   [2] col    - column offset (index)
-///   [3] stride - row stride in elements (index)
-///
-/// Algorithm:
-///   1. Compute the base offset in the buffer: base_offset = row * stride + col
-///   2. Compute the per-thread offset within the tile:
-///      - Get thread IDs: tid_x = gpu.thread_id x, tid_y = gpu.thread_id y
-///      - Get layout params: thread[0], thread[1], vector_size from layout
-///      - linear_tid = tid_y * thread[0] + tid_x
-///      - thread_offset = linear_tid * vector_size
-///   3. Final offset = base_offset + thread_offset
-///   4. Create tiny.load with the final offset and per-thread vector type
-///
-/// Output:
-///   Replaces the tile load with a tiny.load that returns vector<Nxf16>
-///   where N = layout.vector_size
-///
-LogicalResult LoadOp::convertToSIMT(RewriterBase &rewriter,
-                                    ValueRange simtOperands) {
-  Location loc = getLoc();
-  auto tileType = cast<TileType>(getResult().getType());
-  LayoutAttr layout = tileType.getLayout();
+// TODO: Implement LoadOp::convertToSIMT
+// Once you add DeclareOpInterfaceMethods<TinyTileLoweringOpInterface> to LoadOp
+// in TinyTileDialect.td, implement this method:
+//
+// LogicalResult LoadOp::convertToSIMT(RewriterBase &rewriter,
+//                                     ValueRange simtOperands) {
+//   // simtOperands: [ptr, row, col, stride]
+//   // 1. Compute base offset: row * stride + col
+//   // 2. Compute per-thread offset using computeThreadOffset helper
+//   // 3. Final offset = base + thread_offset
+//   // 4. Create tiny.load with the final offset and per-thread vector type
+// }
 
-  // simtOperands: [ptr, row, col, stride]
-  Value ptr = simtOperands[0];
-  Value row = simtOperands[1];
-  Value col = simtOperands[2];
-  Value stride = simtOperands[3];
+// TODO: Implement StoreOp::convertToSIMT
+// Once you add DeclareOpInterfaceMethods<TinyTileLoweringOpInterface> to StoreOp
+// in TinyTileDialect.td, implement this method:
+//
+// LogicalResult StoreOp::convertToSIMT(RewriterBase &rewriter,
+//                                      ValueRange simtOperands) {
+//   // simtOperands: [value, ptr, row, col, stride]
+//   // 1. Compute base offset: row * stride + col
+//   // 2. Compute per-thread offset using computeThreadOffset helper
+//   // 3. Final offset = base + thread_offset
+//   // 4. Create tiny.store with the value and final offset
+// }
 
-  // Compute base offset: row * stride + col.
-  Value baseOffset = computeBaseOffset(rewriter, loc, row, col, stride);
-
-  // Compute per-thread offset.
-  Value threadOffset = computeThreadOffset(rewriter, loc, layout);
-
-  // Final offset = base + thread_offset.
-  Value finalOffset =
-      arith::AddIOp::create(rewriter, loc, baseOffset, threadOffset);
-
-  // Create tiny.load with the computed offset.
-  VectorType vectorType = tileType.getPerThreadVectorType();
-  rewriter.replaceOpWithNewOp<tiny::LoadOp>(*this, vectorType, ptr,
-                                            finalOffset);
-
-  return success();
-}
-
-/// Convert tiny_tile.store to tiny.store with per-thread offset computation.
-///
-/// The tile store needs to be converted to a per-thread vector store. Each
-/// thread stores its `vector_size` elements to the appropriate location.
-///
-/// Input operands (simtOperands):
-///   [0] value  - the per-thread vector to store (vector<Nxf16>)
-///   [1] ptr    - base pointer (!tiny.ptr)
-///   [2] row    - row offset (index)
-///   [3] col    - column offset (index)
-///   [4] stride - row stride in elements (index)
-///
-/// Algorithm:
-///   1. Compute the base offset in the buffer: base_offset = row * stride + col
-///   2. Compute the per-thread offset within the tile:
-///      - Get thread IDs: tid_x = gpu.thread_id x, tid_y = gpu.thread_id y
-///      - Get layout params: thread[0], thread[1], vector_size from layout
-///      - linear_tid = tid_y * thread[0] + tid_x
-///      - thread_offset = linear_tid * vector_size
-///   3. Final offset = base_offset + thread_offset
-///   4. Create tiny.store with the value and final offset
-///
-/// Output:
-///   Replaces the tile store with a tiny.store
-///
-LogicalResult StoreOp::convertToSIMT(RewriterBase &rewriter,
-                                     ValueRange simtOperands) {
-  Location loc = getLoc();
-  auto tileType = cast<TileType>(getValue().getType());
-  LayoutAttr layout = tileType.getLayout();
-
-  // simtOperands: [value, ptr, row, col, stride]
-  Value value = simtOperands[0];
-  Value ptr = simtOperands[1];
-  Value row = simtOperands[2];
-  Value col = simtOperands[3];
-  Value stride = simtOperands[4];
-
-  // Compute base offset: row * stride + col.
-  Value baseOffset = computeBaseOffset(rewriter, loc, row, col, stride);
-
-  // Compute per-thread offset.
-  Value threadOffset = computeThreadOffset(rewriter, loc, layout);
-
-  // Final offset = base + thread_offset.
-  Value finalOffset =
-      arith::AddIOp::create(rewriter, loc, baseOffset, threadOffset);
-
-  // Create tiny.store with the computed offset.
-  rewriter.replaceOpWithNewOp<tiny::StoreOp>(*this, value, ptr, finalOffset);
-
-  return success();
-}
-
-/// Convert tiny_tile.sum to a two-level reduction: local + cross-thread.
-///
-/// The tile sum reduces all elements across all threads to a single scalar.
-/// This requires two levels of reduction:
-///   1. Each thread reduces its local vector<Nxf16> to a scalar
-///   2. All threads combine their local sums via cross-thread reduction
-///
-/// Input operands (simtOperands):
-///   [0] input - the per-thread vector (vector<Nxf16>)
-///
-/// Algorithm:
-///   1. Reduce the per-thread vector to vector<1xf16> using tiny.sum
-///   2. Extract the scalar (f16) from vector<1xf16> using vector.extract
-///   3. Perform cross-thread reduction using gpu.subgroup_reduce with ADD
-///   4. Broadcast the scalar result back to vector<1xf16> using vector.broadcast
-///      (needed for compatibility with tiny.store which expects vector<1xf16>)
-///
-/// Output:
-///   Replaces the tile sum with a vector<1xf16> containing the total sum
-///
-LogicalResult SumOp::convertToSIMT(RewriterBase &rewriter,
-                                   ValueRange simtOperands) {
-  Location loc = getLoc();
-  Value input = simtOperands[0];
-
-  // First, reduce the per-thread vector to a scalar using tiny.sum.
-  VectorType vec1Type = VectorType::get({1}, rewriter.getF16Type());
-  Value localSum = tiny::SumOp::create(rewriter, loc, vec1Type, input);
-
-  // Extract the scalar from vector<1xf16>.
-  Value scalar =
-      vector::ExtractOp::create(rewriter, loc, localSum, ArrayRef<int64_t>{0});
-
-  // Perform cross-thread reduction using gpu.subgroup_reduce.
-  Value subgroupSum = gpu::SubgroupReduceOp::create(
-      rewriter, loc, scalar, gpu::AllReduceOperation::ADD, /*uniform=*/true);
-
-  // Wrap result back to vector<1xf16> for compatibility with tiny.store.
-  Value result =
-      vector::BroadcastOp::create(rewriter, loc, vec1Type, subgroupSum);
-
-  rewriter.replaceOp(*this, result);
-  return success();
-}
+// TODO: Implement SumOp::convertToSIMT
+// Once you add DeclareOpInterfaceMethods<TinyTileLoweringOpInterface> to SumOp
+// in TinyTileDialect.td, implement this method:
+//
+// LogicalResult SumOp::convertToSIMT(RewriterBase &rewriter,
+//                                    ValueRange simtOperands) {
+//   // simtOperands: [input] - the per-thread vector (vector<Nxf16>)
+//   // 1. Reduce the per-thread vector to vector<1xf16> using tiny.sum
+//   // 2. Extract the scalar (f16) from vector<1xf16> using vector.extract
+//   // 3. Perform cross-thread reduction using gpu.subgroup_reduce with ADD
+//   // 4. Broadcast the scalar result back to vector<1xf16> using vector.broadcast
+// }
 
 LogicalResult SplatOp::convertToSIMT(RewriterBase &rewriter,
                                      ValueRange simtOperands) {
