@@ -55,3 +55,7 @@ python tutorial/ch1-cpu-vector-dsl/square.py
 ```
 
 The examples will print the generated MLIR at each lowering stage.
+
+## Doing tutorial exercises
+
+Each tutorial chapter has a README.md file explaining how to start with the exercise and some basic explanation of the exercise. For example, check out tutorial/ch1-cpu-vector-dsl/README.md
