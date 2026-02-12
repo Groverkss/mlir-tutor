@@ -1,7 +1,10 @@
 """DSL for TinyLoop dialect (Chapter 2)."""
 
 from mlir.ir import (
-    Value, Block, Operation, InsertionPoint,
+    Value,
+    Block,
+    Operation,
+    InsertionPoint,
     IndexType,
 )
 
@@ -59,8 +62,9 @@ def accumulate(bound: Index, step: Index, inits: list = None):
         # Execute body with wrapped arguments
         with InsertionPoint(block):
             iv = Index._wrap(block.arguments[0])
-            iter_args = [_wrap_value(block.arguments[i+1], inits[i])
-                         for i in range(len(inits))]
+            iter_args = [
+                _wrap_value(block.arguments[i + 1], inits[i]) for i in range(len(inits))
+            ]
 
             # Call user's body function
             if inits:
@@ -77,14 +81,16 @@ def accumulate(bound: Index, step: Index, inits: list = None):
 
         # Wrap and return results
         if result_types:
-            return [_wrap_value(op.results[i], inits[i])
-                    for i in range(len(result_types))]
+            return [
+                _wrap_value(op.results[i], inits[i]) for i in range(len(result_types))
+            ]
         return None
 
     return decorator
 
 
 # --- Convenience functions ---
+
 
 def _get_type_map():
     """Type map for ch2 (same as ch1)."""
@@ -124,7 +130,9 @@ def compile_and_print(fn):
     print(arith_ir)
 
     # Lower to LLVM
-    llvm_ir = opt.run(arith_ir, ["tiny-to-llvm", "convert-scf-to-cf", "convert-to-llvm"])
+    llvm_ir = opt.run(
+        arith_ir, ["tiny-to-llvm", "convert-scf-to-cf", "convert-to-llvm"]
+    )
     print("=== LLVM Dialect ===")
     print(llvm_ir)
 

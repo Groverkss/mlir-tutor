@@ -2,8 +2,13 @@
 
 from tiny.ch2 import accumulate
 from tiny.ch3 import (
-    Ptr, Index, Layout, Tile, load_tile,
-    block_id_x, compile_and_print,
+    Ptr,
+    Index,
+    Layout,
+    Tile,
+    load_tile,
+    block_id_x,
+    compile_and_print,
 )
 
 # 1x256 tile = 256 elements

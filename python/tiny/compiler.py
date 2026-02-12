@@ -92,7 +92,9 @@ class MLIRModule:
 
         return self.module
 
-    def build_func_verified(self, fn: Callable, type_map: dict, opt: "TutorialOpt") -> str:
+    def build_func_verified(
+        self, fn: Callable, type_map: dict, opt: "TutorialOpt"
+    ) -> str:
         """Build and verify module, return pretty-printed IR.
 
         Runs the generated IR through tutorial-opt to verify it's valid
