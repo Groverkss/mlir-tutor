@@ -1,6 +1,16 @@
 """DSL for TinyTile dialect (Chapter 3)."""
 
-from mlir.ir import Value, Type, Operation, Attribute, IndexType, F16Type, F64Type, FloatAttr, VectorType
+from mlir.ir import (
+    Value,
+    Type,
+    Operation,
+    Attribute,
+    IndexType,
+    F16Type,
+    F64Type,
+    FloatAttr,
+    VectorType,
+)
 from ..ch1.dsl import Index, Ptr, F16Vector
 from ..compiler import MLIRModule, TutorialOpt
 
@@ -18,13 +28,21 @@ class Layout:
 
 class Tile:
     """Wrapper for !tiny_tile.tile SSA values."""
+
     _value: Value
     _height: int
     _width: int
     _layout: Layout
 
     @staticmethod
-    def _wrap(value: Value, height: int = None, width: int = None, layout: Layout = None, *, template: "Tile" = None) -> "Tile":
+    def _wrap(
+        value: Value,
+        height: int = None,
+        width: int = None,
+        layout: Layout = None,
+        *,
+        template: "Tile" = None,
+    ) -> "Tile":
         """Wrap an MLIR value as a Tile.
 
         Can be called with explicit dimensions or with a template tile to copy from.
@@ -50,8 +68,10 @@ class Tile:
         )
 
     def _binop(self, other: "Tile", kind: str) -> "Tile":
-        if self._layout.thread != other._layout.thread or \
-           self._layout.vector_size != other._layout.vector_size:
+        if (
+            self._layout.thread != other._layout.thread
+            or self._layout.vector_size != other._layout.vector_size
+        ):
             raise ValueError("Operands must have the same layout")
         result_type = Tile._get_type(self._height, self._width, self._layout)
         kind_attr = Attribute.parse(f"#tiny_tile<ew_kind {kind}>")
@@ -59,14 +79,21 @@ class Tile:
             "tiny_tile.elementwise",
             results=[result_type],
             operands=[self._value, other._value],
-            attributes={"kind": kind_attr}
+            attributes={"kind": kind_attr},
         )
         return Tile._wrap(op.result, self._height, self._width, self._layout)
 
-    def __add__(self, other): return self._binop(other, "add")
-    def __sub__(self, other): return self._binop(other, "sub")
-    def __mul__(self, other): return self._binop(other, "mul")
-    def __truediv__(self, other): return self._binop(other, "div")
+    def __add__(self, other):
+        return self._binop(other, "add")
+
+    def __sub__(self, other):
+        return self._binop(other, "sub")
+
+    def __mul__(self, other):
+        return self._binop(other, "mul")
+
+    def __truediv__(self, other):
+        return self._binop(other, "div")
 
     @staticmethod
     def splat(value: float, height: int, width: int, layout: Layout) -> "Tile":
@@ -92,11 +119,18 @@ class Tile:
             results=[VectorType.get([1], F16Type.get())],
             operands=[self._value],
         )
-        return F16Vector._wrap(op.result)
+        return op.result
 
 
-def load_tile(ptr: Ptr, row: Index, col: Index, stride: Index,
-              height: int, width: int, layout: Layout) -> Tile:
+def load_tile(
+    ptr: Ptr,
+    row: Index,
+    col: Index,
+    stride: Index,
+    height: int,
+    width: int,
+    layout: Layout,
+) -> Tile:
     """Load a tile from memory (tiny_tile.load).
 
     The layout specifies how elements are distributed across threads.
@@ -105,7 +139,7 @@ def load_tile(ptr: Ptr, row: Index, col: Index, stride: Index,
     op = Operation.create(
         "tiny_tile.load",
         results=[tile_type],
-        operands=[ptr._value, row._value, col._value, stride._value],
+        operands=[ptr._value, row, col, stride],
     )
     return Tile._wrap(op.result, height, width, layout)
 
@@ -120,6 +154,7 @@ def store_tile(tile: Tile, ptr: Ptr, row: Index, col: Index, stride: Index):
 
 # --- GPU block/thread ID functions ---
 
+
 def block_id_x() -> Index:
     """Get the block ID in the x dimension (gpu.block_id x)."""
     op = Operation.create(
@@ -127,7 +162,7 @@ def block_id_x() -> Index:
         results=[IndexType.get()],
         attributes={"dimension": Attribute.parse("#gpu<dim x>")},
     )
-    return Index._wrap(op.result)
+    return op.result
 
 
 def block_id_y() -> Index:
@@ -137,7 +172,7 @@ def block_id_y() -> Index:
         results=[IndexType.get()],
         attributes={"dimension": Attribute.parse("#gpu<dim y>")},
     )
-    return Index._wrap(op.result)
+    return op.result
 
 
 def block_id_z() -> Index:
@@ -147,10 +182,11 @@ def block_id_z() -> Index:
         results=[IndexType.get()],
         attributes={"dimension": Attribute.parse("#gpu<dim z>")},
     )
-    return Index._wrap(op.result)
+    return op.result
 
 
 # --- Convenience functions ---
+
 
 def _get_type_map():
     """Type map for ch3."""

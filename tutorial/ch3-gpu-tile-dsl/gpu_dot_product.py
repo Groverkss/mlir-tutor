@@ -2,8 +2,13 @@
 
 from tiny.ch2 import accumulate
 from tiny.ch3 import (
-    Ptr, Index, Layout, Tile, load_tile,
-    block_id_x, compile_and_print,
+    Ptr,
+    Index,
+    Layout,
+    Tile,
+    load_tile,
+    block_id_x,
+    compile_and_print,
 )
 
 # 1x256 tile = 256 elements
@@ -13,7 +18,7 @@ TILE_H, TILE_W = 1, 256
 
 
 @compile_and_print
-def dot(a: Ptr, b: Ptr, out: Ptr, M: Index, K: Index):
+def dot(a: Ptr, b: Ptr, out: Ptr, K: Index):
     """
     Given two arrays of shape MxK, we perform a dot product over them.
 
@@ -35,7 +40,7 @@ def dot(a: Ptr, b: Ptr, out: Ptr, M: Index, K: Index):
     # once.
     @accumulate(K, tile_w, inits=[acc_init])
     def _(tile_idx: Index, acc: Tile):
-        # Load a[bid,tile_idx : tile_idx + tile_w]
+        # Load a[bid, tile_idx : tile_idx + tile_w]
         a_tile = load_tile(a, bid, tile_idx, K, TILE_H, TILE_W, LAYOUT)
         b_tile = load_tile(b, bid, tile_idx, K, TILE_H, TILE_W, LAYOUT)
 

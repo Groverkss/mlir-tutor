@@ -2,6 +2,7 @@
 
 from tiny.ch1 import Ptr, Index, compile_and_print
 
+
 @compile_and_print
 def square(a: Ptr, result: Ptr, offset: Index):
     """Square a vector of 16 f16 elements."""

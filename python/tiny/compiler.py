@@ -1,6 +1,6 @@
 """Common compiler infrastructure for the tutorial DSL."""
 
-from mlir.ir import Context, Location, Module, InsertionPoint, IndexType, Type
+from mlir.ir import Context, Location, Module, InsertionPoint
 import mlir.dialects.func as func_d
 import subprocess
 import os
@@ -24,7 +24,7 @@ class TutorialOpt:
     """Wrapper around tutorial-opt for running passes."""
 
     def __init__(self, binary_path: str = None):
-        self.binary = binary_path or _get_tutorial_opt()
+        self.binary = (binary_path or _get_tutorial_opt()).strip()
 
     def run(self, ir: str, passes: list[str]) -> str:
         """Run passes on IR string, return transformed IR."""
@@ -62,6 +62,9 @@ class MLIRModule:
             fn: Function to compile (uses type annotations for args)
             type_map: Maps annotation types to (mlir_type, wrapper_class) tuples
         """
+        # prevent circular import
+        from tiny.ch1 import Ptr
+
         sig = inspect.signature(fn)
         self.module = Module.create()
 
@@ -82,7 +85,10 @@ class MLIRModule:
                 args = []
                 for i, param in enumerate(sig.parameters.values()):
                     _, wrapper_cls = type_map[param.annotation]
-                    args.append(wrapper_cls._wrap(func_op.arguments[i]))
+                    if wrapper_cls is Ptr:
+                        args.append(wrapper_cls._wrap(func_op.arguments[i]))
+                    else:
+                        args.append(func_op.arguments[i])
 
                 # Execute user function body
                 fn(*args)
@@ -92,7 +98,9 @@ class MLIRModule:
 
         return self.module
 
-    def build_func_verified(self, fn: Callable, type_map: dict, opt: "TutorialOpt") -> str:
+    def build_func_verified(
+        self, fn: Callable, type_map: dict, opt: "TutorialOpt"
+    ) -> str:
         """Build and verify module, return pretty-printed IR.
 
         Runs the generated IR through tutorial-opt to verify it's valid
