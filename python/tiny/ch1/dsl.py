@@ -1,22 +1,22 @@
 """DSL wrapper types for Tiny dialect."""
 
 from mlir.ir import (
-    Value, Type, Operation,
-    IndexType, VectorType, F16Type,
-    IntegerAttr, DenseElementsAttr,
+    Value,
+    Type,
+    Operation,
+    IndexType,
+    VectorType,
+    F16Type,
+    IntegerAttr,
+    DenseElementsAttr,
+    register_value_caster,
 )
 import numpy as np
 
 
-class Index:
+@register_value_caster(IndexType.static_typeid)
+class Index(Value):
     """Wrapper for index-typed SSA values."""
-    _value: Value
-
-    @staticmethod
-    def _wrap(value: Value) -> "Index":
-        idx = Index()
-        idx._value = value
-        return idx
 
     @staticmethod
     def constant(val: int) -> "Index":
@@ -28,31 +28,34 @@ class Index:
             results=[idx_type],
             attributes={"value": attr},
         )
-        return Index._wrap(op.result)
+        return op.result
 
     def _binop(self, other: "Index", op_name: str) -> "Index":
         op = Operation.create(
             f"tiny.{op_name}",
             results=[IndexType.get()],
-            operands=[self._value, other._value],
+            operands=[self, other],
         )
-        return Index._wrap(op.result)
+        return op.result
 
-    def __add__(self, other): return self._binop(other, "addi")
-    def __sub__(self, other): return self._binop(other, "subi")
-    def __mul__(self, other): return self._binop(other, "muli")
-    def __floordiv__(self, other): return self._binop(other, "divi")
+    def __add__(self, other):
+        return self._binop(other, "addi")
+
+    def __sub__(self, other):
+        return self._binop(other, "subi")
+
+    def __mul__(self, other):
+        return self._binop(other, "muli")
+
+    def __floordiv__(self, other):
+        return self._binop(other, "divi")
+
+    def __repr__(self):
+        return repr(self).replace("Value", "Index")
 
 
-class F16Vector:
+class F16Vector(Value):
     """Wrapper for vector<Nxf16> SSA values."""
-    _value: Value
-
-    @staticmethod
-    def _wrap(value: Value) -> "F16Vector":
-        vec = F16Vector()
-        vec._value = value
-        return vec
 
     @staticmethod
     def constant(vals: list[float], size: int = None) -> "F16Vector":
@@ -66,20 +69,27 @@ class F16Vector:
             results=[vec_type],
             attributes={"value": attr},
         )
-        return F16Vector._wrap(op.result)
+        return op.result
 
     def _binop(self, other: "F16Vector", op_name: str) -> "F16Vector":
         op = Operation.create(
             f"tiny.{op_name}",
-            results=[self._value.type],
-            operands=[self._value, other._value],
+            results=[self.type],
+            operands=[self, other],
         )
-        return F16Vector._wrap(op.result)
+        return op.result
 
-    def __add__(self, other): return self._binop(other, "addf")
-    def __sub__(self, other): return self._binop(other, "subf")
-    def __mul__(self, other): return self._binop(other, "mulf")
-    def __truediv__(self, other): return self._binop(other, "divf")
+    def __add__(self, other):
+        return self._binop(other, "addf")
+
+    def __sub__(self, other):
+        return self._binop(other, "subf")
+
+    def __mul__(self, other):
+        return self._binop(other, "mulf")
+
+    def __truediv__(self, other):
+        return self._binop(other, "divf")
 
     def sum(self) -> "F16Vector":
         """Reduce to vector<1xf16> via tiny.sum."""
@@ -87,13 +97,24 @@ class F16Vector:
         op = Operation.create(
             "tiny.sum",
             results=[result_type],
-            operands=[self._value],
+            operands=[self],
         )
-        return F16Vector._wrap(op.result)
+        return op.result
+
+    def __repr__(self):
+        return repr(self).replace("Value", "F16Vector")
+
+
+@register_value_caster(VectorType.static_typeid)
+def maybe_wrap_vector(val: Value):
+    if isinstance(val.type.element_type, F16Type):
+        return F16Vector(val)
+    return val
 
 
 class Ptr:
     """Wrapper for !tiny.ptr SSA values."""
+
     _value: Value
 
     @staticmethod
@@ -113,22 +134,23 @@ class Ptr:
         op = Operation.create(
             "tiny.load",
             results=[vec_type],
-            operands=[self._value, offset._value],
+            operands=[self._value, offset],
         )
-        return F16Vector._wrap(op.result)
+        return op.result
 
     def store(self, offset: Index, vec: F16Vector) -> None:
         """Store vector<Nxf16> to pointer at offset."""
         Operation.create(
             "tiny.store",
             results=[],
-            operands=[vec._value, self._value, offset._value],
+            operands=[vec, self._value, offset],
         )
 
 
 # --- Convenience functions ---
 
 from ..compiler import MLIRModule, TutorialOpt
+
 
 def _get_type_map():
     """Type map for ch1 tiny dialect."""
@@ -137,6 +159,7 @@ def _get_type_map():
         Index: (IndexType.get, Index),
     }
 
+
 def print_ir(fn):
     """Print generated Tiny dialect IR (verified and pretty-printed)."""
     opt = TutorialOpt()
@@ -144,6 +167,7 @@ def print_ir(fn):
         tiny_ir = m.build_func_verified(fn, _get_type_map(), opt)
         print(tiny_ir)
     return fn
+
 
 def compile_and_print(fn):
     """Compile and print all lowering stages."""
@@ -159,7 +183,10 @@ def compile_and_print(fn):
     print("=== After tiny-to-arith ===")
     print(arith_ir)
 
-    llvm_ir = opt.run(tiny_ir, ["tiny-to-arith", "canonicalize", "cse", "tiny-to-llvm", "convert-to-llvm"])
+    llvm_ir = opt.run(
+        tiny_ir,
+        ["tiny-to-arith", "canonicalize", "cse", "tiny-to-llvm", "convert-to-llvm"],
+    )
     print("=== LLVM Dialect ===")
     print(llvm_ir)
 

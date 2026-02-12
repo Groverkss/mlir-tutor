@@ -1,7 +1,10 @@
 """DSL for TinyLoop dialect (Chapter 2)."""
 
 from mlir.ir import (
-    Value, Block, Operation, InsertionPoint,
+    Value,
+    Block,
+    Operation,
+    InsertionPoint,
     IndexType,
 )
 
@@ -13,6 +16,9 @@ from ..compiler import MLIRModule, TutorialOpt
 def _wrap_value(value: Value, template):
     """Wrap MLIR value using the same type as template."""
     # Try passing template for types that need it (e.g., Tile)
+    if isinstance(value, (F16Vector, Index)):
+        return value
+
     try:
         return type(template)._wrap(value, template=template)
     except TypeError:
@@ -39,15 +45,20 @@ def accumulate(bound: Index, step: Index, inits: list = None):
 
     def decorator(body_fn):
         # Get init value types and MLIR values
-        init_values = [v._value for v in inits]
-        init_types = [v._value.type for v in inits]
+        init_values = [
+            v if isinstance(v, (Index, F16Vector)) else v._value for v in inits
+        ]
+        init_types = [
+            v.type if isinstance(v, (Index, F16Vector)) else v._value.type
+            for v in inits
+        ]
         result_types = init_types  # Results match init types
 
         # Create the accumulate op with one region
         op = Operation.create(
             "tiny_loop.accumulate",
             results=result_types,
-            operands=[bound._value, step._value] + init_values,
+            operands=[bound, step] + init_values,
             regions=1,  # One region for the body
         )
 
@@ -58,16 +69,20 @@ def accumulate(bound: Index, step: Index, inits: list = None):
 
         # Execute body with wrapped arguments
         with InsertionPoint(block):
-            iv = Index._wrap(block.arguments[0])
-            iter_args = [_wrap_value(block.arguments[i+1], inits[i])
-                         for i in range(len(inits))]
+            iv = block.arguments[0]
+            iter_args = [
+                _wrap_value(block.arguments[i + 1], inits[i]) for i in range(len(inits))
+            ]
 
             # Call user's body function
             if inits:
                 results = body_fn(iv, *iter_args)
                 if not isinstance(results, (list, tuple)):
                     results = [results]
-                yield_values = [r._value for r in results]
+                yield_values = [
+                    r if isinstance(r, (Index, F16Vector)) else r._value
+                    for r in results
+                ]
             else:
                 body_fn(iv)
                 yield_values = []
@@ -77,14 +92,16 @@ def accumulate(bound: Index, step: Index, inits: list = None):
 
         # Wrap and return results
         if result_types:
-            return [_wrap_value(op.results[i], inits[i])
-                    for i in range(len(result_types))]
+            return [
+                _wrap_value(op.results[i], inits[i]) for i in range(len(result_types))
+            ]
         return None
 
     return decorator
 
 
 # --- Convenience functions ---
+
 
 def _get_type_map():
     """Type map for ch2 (same as ch1)."""
@@ -124,7 +141,9 @@ def compile_and_print(fn):
     print(arith_ir)
 
     # Lower to LLVM
-    llvm_ir = opt.run(arith_ir, ["tiny-to-llvm", "convert-scf-to-cf", "convert-to-llvm"])
+    llvm_ir = opt.run(
+        arith_ir, ["tiny-to-llvm", "convert-scf-to-cf", "convert-to-llvm"]
+    )
     print("=== LLVM Dialect ===")
     print(llvm_ir)
 

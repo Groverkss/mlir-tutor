@@ -2,15 +2,13 @@
 
 from ..ch1 import Index, Ptr
 from .dsl import (
-    Layout, Tile, load_tile, store_tile,
-    block_id_x, block_id_y, block_id_z,
-    print_ir, compile_and_print,
+    Layout,
+    Tile,
+    load_tile,
+    store_tile,
+    block_id_x,
+    block_id_y,
+    block_id_z,
+    print_ir,
+    compile_and_print,
 )
-
-__all__ = [
-    "Index", "Ptr",
-    "Layout", "Tile",
-    "load_tile", "store_tile",
-    "block_id_x", "block_id_y", "block_id_z",
-    "print_ir", "compile_and_print",
-]
